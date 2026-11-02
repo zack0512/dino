@@ -36,6 +36,592 @@
       background-color: transparent;
       display: block;
       margin: 0 auto;
+      max-width: 100%;
+    }
+    #ui-panel {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-top: 15px;
+      font-weight: bold;
+    }
+    #controls-info {
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    #leaderboard-box {
+      background: rgba(0, 0, 0, 0.05);
+      padding: 12px 16px;
+      border-radius: 8px;
+      min-width: 230px;
+      font-size: 13px;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
+    }
+    body.night #leaderboard-box {
+      background: rgba(255, 255, 255, 0.08);
+    }
+    #leaderboard-box h4 {
+      margin-bottom: 6px;
+      border-bottom: 2px dashed currentColor;
+      padding-bottom: 4px;
+    }
+    #leaderboard-list {
+      list-style: none;
+    }
+    #leaderboard-list li {
+      display: flex;
+      justify-content: space-between;
+      margin: 4px 0;
+    }
+    #name-modal {
+      display: none;
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #fff;
+      color: #333;
+      padding: 25px;
+      border: 3px solid #535353;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+      text-align: center;
+      z-index: 10;
+    }
+    body.night #name-modal {
+      background: #2b2c2f;
+      color: #fff;
+      border-color: #e8eaed;
+    }
+    #name-modal input {
+      padding: 10px;
+      margin: 12px 0;
+      font-size: 16px;
+      font-family: inherit;
+      width: 80%;
+      text-align: center;
+      border: 2px solid #ccc;
+      border-radius: 6px;
+      outline: none;
+    }
+    #name-modal button {
+      padding: 9px 20px;
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: bold;
+      cursor: pointer;
+      background: #535353;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+    }
+    body.night #name-modal button {
+      background: #e8eaed;
+      color: #202124;
+    }
+  </style>
+</head>
+<body>
+
+<div id="game-container">
+  <canvas id="gameCanvas" width="800" height="250"></canvas>
+  
+  <div id="ui-panel">
+    <div id="controls-info">
+      <p>🎮 操作指南：</p>
+      <p>• [Space] / [↑] / 點擊螢幕：跳躍</p>
+      <p>• [↓] 按住：蹲下避開高空飛鳥</p>
+    </div>
+    <div id="leaderboard-box">
+      <h4>🏆 全域前 10 名排行榜</h4>
+      <ol id="leaderboard-list">
+        <li>載入中...</li>
+      </ol>
+    </div>
+  </div>
+
+  <div id="name-modal">
+    <h3>🎉 榮登高分榜！</h3>
+    <p>請輸入您的名字紀錄戰績：</p>
+    <input type="text" id="player-name-input" maxlength="10" placeholder="您的名字">
+    <br>
+    <button id="submit-name-btn">確認送出</button>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBZ9s5Ku8aEzaVEmk_7ztbIiHXI6qmz5H0",
+    authDomain: "my-project-zack0512.firebaseapp.com",
+    databaseURL: "https://my-project-zack0512-default-rtdb.firebaseio.com",
+    projectId: "my-project-zack0512",
+    storageBucket: "my-project-zack0512.firebasestorage.app",
+    messagingSenderId: "972310414233",
+    appId: "1:972310414233:web:4014908a1e187754530908",
+    measurementId: "G-YKEN22N04Y"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const leaderboardRef = ref(db, 'leaderboard');
+
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const nameModal = document.getElementById('name-modal');
+  const nameInput = document.getElementById('player-name-input');
+  const submitBtn = document.getElementById('submit-name-btn');
+  const leaderboardList = document.getElementById('leaderboard-list');
+
+  let gameState = 'START';
+  let score = 0;
+  let highScore = 0;
+  let globalScores = [];
+  let currentSpeed = 6;
+  const initialSpeed = 6;
+  const maxSpeed = 22;
+  let isNight = false;
+  let frameCount = 0;
+
+  // 地面顆粒與星空
+  const groundOffset = 210;
+  let groundDots = Array.from({length: 30}, () => ({
+    x: Math.random() * canvas.width,
+    y: groundOffset + 4 + Math.random() * 20,
+    size: Math.random() > 0.5 ? 2 : 4
+  }));
+
+  const stars = Array.from({length: 20}, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * 120,
+    size: Math.random() > 0.5 ? 2 : 3
+  }));
+
+  // 音效
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function playSound(freq, type, duration) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  }
+
+  function playJumpSound() { playSound(400, 'square', 0.1); }
+  function playHitSound() { playSound(150, 'sawtooth', 0.25); }
+  function playScoreSound() { playSound(850, 'sine', 0.15); }
+
+  // 精緻恐龍物件 (包含像素圖案繪製)
+  const dino = {
+    x: 50,
+    y: 164,
+    width: 44,
+    height: 46,
+    velocityY: 0,
+    gravity: 0.65,
+    jumpPower: -11.5,
+    isGrounded: true,
+    isDucking: false,
+    legFrame: 0,
+    
+    draw() {
+      const color = isNight ? '#e8eaed' : '#535353';
+      const bgColor = isNight ? '#202124' : '#f7f7f7';
+      ctx.fillStyle = color;
+
+      if (this.isDucking && this.isGrounded) {
+        // 蹲下精細像素
+        const dy = 184;
+        ctx.fillRect(this.x, dy + 10, 52, 16); // 身軀
+        ctx.fillRect(this.x + 36, dy + 4, 20, 12); // 頭部
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(this.x + 50, dy + 6, 2, 2); // 眼睛
+        ctx.fillStyle = color;
+        // 動態小腳
+        if (this.legFrame < 5) {
+          ctx.fillRect(this.x + 10, dy + 26, 4, 4);
+        } else {
+          ctx.fillRect(this.x + 32, dy + 26, 4, 4);
+        }
+      } else {
+        // 站立/跳躍精細像素
+        const dx = this.x;
+        const dy = this.y;
+
+        // 頭部與嘴巴
+        ctx.fillRect(dx + 22, dy, 22, 18);
+        ctx.fillRect(dx + 26, dy + 12, 18, 4);
+        // 眼睛
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(dx + 26, dy + 4, 3, 3);
+        ctx.fillStyle = color;
+
+        // 軀幹與尾巴
+        ctx.fillRect(dx + 10, dy + 14, 20, 20);
+        ctx.fillRect(dx + 4, dy + 18, 6, 12);
+        ctx.fillRect(dx, dy + 22, 4, 6);
+        // 小手
+        ctx.fillRect(dx + 28, dy + 22, 4, 4);
+
+        // 腳部 (跳躍時固定，跑步時動態)
+        if (!this.isGrounded) {
+          ctx.fillRect(dx + 12, dy + 34, 4, 8);
+          ctx.fillRect(dx + 20, dy + 34, 4, 5);
+        } else {
+          if (this.legFrame < 5) {
+            ctx.fillRect(dx + 12, dy + 34, 4, 12); // 左腳落地
+            ctx.fillRect(dx + 14, dy + 44, 4, 2);
+            ctx.fillRect(dx + 22, dy + 34, 4, 6);  // 右腳抬起
+          } else {
+            ctx.fillRect(dx + 12, dy + 34, 4, 6);  // 左腳抬起
+            ctx.fillRect(dx + 22, dy + 34, 4, 12); // 右腳落地
+            ctx.fillRect(dx + 24, dy + 44, 4, 2);
+          }
+        }
+      }
+    },
+    jump() {
+      if (this.isGrounded) {
+        this.velocityY = this.jumpPower;
+        this.isGrounded = false;
+        playJumpSound();
+      }
+    },
+    update() {
+      if (!this.isGrounded) {
+        this.velocityY += this.gravity;
+        this.y += this.velocityY;
+        if (this.y >= 164) {
+          this.y = 164;
+          this.velocityY = 0;
+          this.isGrounded = true;
+        }
+      }
+      this.legFrame = (this.legFrame + 1) % 10;
+    }
+  };
+
+  // 障礙物物件與動態繪製
+  let obstacles = [];
+  function spawnObstacle() {
+    const isBird = Math.random() < 0.35 && score > 200;
+    if (!isBird) {
+      // 仙人掌 (單株/雙株/三株)
+      const count = Math.floor(Math.random() * 3) + 1;
+      obstacles.push({
+        x: canvas.width,
+        y: 166,
+        width: count * 16 + 6,
+        height: 44,
+        type: 'CACTUS',
+        count: count
+      });
+    } else {
+      // 翼龍
+      const birdY = Math.random() < 0.5 ? 125 : 160;
+      obstacles.push({
+        x: canvas.width,
+        y: birdY,
+        width: 38,
+        height: 26,
+        type: 'BIRD',
+        wingFrame: 0
+      });
+    }
+  }
+
+  function drawCactus(obs) {
+    ctx.fillStyle = isNight ? '#e8eaed' : '#535353';
+    for (let c = 0; c < obs.count; c++) {
+      const cx = obs.x + c * 16;
+      const cy = obs.y;
+      // 主幹
+      ctx.fillRect(cx + 4, cy, 8, 44);
+      // 左枝
+      ctx.fillRect(cx, cy + 12, 4, 14);
+      ctx.fillRect(cx, cy + 22, 8, 4);
+      // 右枝
+      ctx.fillRect(cx + 12, cy + 18, 4, 14);
+      ctx.fillRect(cx + 8, cy + 28, 8, 4);
+    }
+  }
+
+  function drawBird(obs) {
+    ctx.fillStyle = isNight ? '#e8eaed' : '#535353';
+    const bx = obs.x;
+    const by = obs.y;
+    // 鳥身與鳥喙
+    ctx.fillRect(bx + 10, by + 10, 20, 10);
+    ctx.fillRect(bx, by + 6, 10, 6);
+    ctx.fillRect(bx + 30, by + 12, 8, 4);
+
+    // 翅膀拍打動畫
+    obs.wingFrame = (obs.wingFrame + 1) % 12;
+    if (obs.wingFrame < 6) {
+      // 翅膀向上
+      ctx.fillRect(bx + 14, by, 6, 10);
+      ctx.fillRect(bx + 16, by - 4, 4, 4);
+    } else {
+      // 翅膀向下
+      ctx.fillRect(bx + 14, by + 18, 6, 10);
+      ctx.fillRect(bx + 16, by + 26, 4, 4);
+    }
+  }
+
+  // Firebase 排行榜數據
+  onValue(leaderboardRef, (snapshot) => {
+    const data = snapshot.val();
+    globalScores = [];
+    if (data) {
+      Object.keys(data).forEach(key => {
+        globalScores.push(data[key]);
+      });
+      globalScores.sort((a, b) => b.score - a.score);
+    }
+    updateLeaderboardUI();
+    if (globalScores.length > 0) {
+      highScore = globalScores[0].score;
+    }
+  });
+
+  function updateLeaderboardUI() {
+    leaderboardList.innerHTML = '';
+    const top10 = globalScores.slice(0, 10);
+    if (top10.length === 0) {
+      leaderboardList.innerHTML = '<li>尚未有紀錄</li>';
+      return;
+    }
+    top10.forEach((item, index) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span>${index + 1}. ${item.name}</span><span>${String(item.score).padStart(5, '0')}</span>`;
+      leaderboardList.appendChild(li);
+    });
+  }
+
+  // 操作監聽
+  window.addEventListener('keydown', (e) => {
+    if ((e.code === 'Space' || e.code === 'ArrowUp')) {
+      if (gameState === 'PLAYING') dino.jump();
+      if (gameState === 'START') resetGame();
+    }
+    if (e.code === 'ArrowDown' && gameState === 'PLAYING') {
+      dino.isDucking = true;
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'ArrowDown') {
+      dino.isDucking = false;
+    }
+  });
+
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    if (gameState === 'PLAYING') dino.jump();
+    if (gameState === 'START') resetGame();
+  });
+
+  function resetGame() {
+    score = 0;
+    currentSpeed = initialSpeed;
+    obstacles = [];
+    gameState = 'PLAYING';
+    isNight = false;
+    document.body.classList.remove('night');
+  }
+
+  function checkCollision(dinoObj, obs) {
+    const dinoHitbox = dinoObj.isDucking && dinoObj.isGrounded
+      ? { x: dinoObj.x, y: 194, width: 52, height: 16 }
+      : { x: dinoObj.x + 6, y: dinoObj.y + 4, width: dinoObj.width - 10, height: dinoObj.height - 4 };
+
+    return (
+      dinoHitbox.x < obs.x + obs.width &&
+      dinoHitbox.x + dinoHitbox.width > obs.x &&
+      dinoHitbox.y < obs.y + obs.height &&
+      dinoHitbox.y + dinoHitbox.height > obs.y
+    );
+  }
+
+  function handleGameOver() {
+    gameState = 'GAMEOVER';
+    playHitSound();
+
+    const currentScoreInt = Math.floor(score);
+    const savedName = localStorage.getItem('pixel_runner_username') || '';
+    nameInput.value = savedName;
+
+    const isTopScore = globalScores.length < 10 || currentScoreInt > (globalScores[9]?.score || 0);
+
+    if (isTopScore && currentScoreInt > 0) {
+      nameModal.style.display = 'block';
+    }
+  }
+
+  submitBtn.addEventListener('click', () => {
+    const name = nameInput.value.trim() || '無名氏';
+    localStorage.setItem('pixel_runner_username', name);
+    const currentScoreInt = Math.floor(score);
+    
+    const newScoreRef = ref(db, 'leaderboard/' + Date.now());
+    set(newScoreRef, {
+      name: name,
+      score: currentScoreInt
+    });
+
+    nameModal.style.display = 'none';
+  });
+
+  // 主更新邏輯
+  function update() {
+    frameCount++;
+
+    if (gameState === 'PLAYING') {
+      const currentScoreInt = Math.floor(score);
+      currentSpeed = Math.min(initialSpeed + currentScoreInt * 0.008, maxSpeed);
+
+      score += 0.15;
+      const updatedScoreInt = Math.floor(score);
+
+      if (updatedScoreInt > 0 && updatedScoreInt % 100 === 0 && Math.floor(score - 0.15) % 100 !== 0) {
+        playScoreSound();
+      }
+
+      if (updatedScoreInt > 0 && updatedScoreInt % 500 === 0) {
+        isNight = Math.floor(updatedScoreInt / 500) % 2 === 1;
+        if (isNight) document.body.classList.add('night');
+        else document.body.classList.remove('night');
+      }
+
+      dino.update();
+
+      // 地面細節顆粒滾動
+      groundDots.forEach(dot => {
+        dot.x -= currentSpeed;
+        if (dot.x < 0) dot.x = canvas.width;
+      });
+
+      // 障礙物生成
+      if (frameCount % Math.max(35, Math.floor(110 - currentSpeed * 3)) === 0) {
+        if (Math.random() < 0.65) spawnObstacle();
+      }
+
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        obstacles[i].x -= currentSpeed;
+
+        if (checkCollision(dino, obstacles[i])) {
+          handleGameOver();
+        }
+
+        if (obstacles[i].x + obstacles[i].width < 0) {
+          obstacles.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  // 主畫面繪製
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const themeColor = isNight ? '#e8eaed' : '#535353';
+
+    // 繪製夜間月亮與繁星
+    if (isNight) {
+      ctx.fillStyle = '#e8eaed';
+      stars.forEach(s => ctx.fillRect(s.x, s.y, s.size, s.size));
+      // 月亮
+      ctx.fillRect(680, 40, 20, 20);
+      ctx.fillStyle = '#202124';
+      ctx.fillRect(676, 36, 12, 12);
+    }
+
+    // 繪製動態地表線條與顆粒
+    ctx.fillStyle = themeColor;
+    ctx.fillRect(0, groundOffset, canvas.width, 2);
+    groundDots.forEach(dot => {
+      ctx.fillRect(dot.x, dot.y, dot.size, 1);
+    });
+
+    // 繪製主角與障礙物
+    dino.draw();
+    obstacles.forEach(obs => {
+      if (obs.type === 'CACTUS') drawCactus(obs);
+      else drawBird(obs);
+    });
+
+    // 繪製計分板
+    ctx.font = '700 18px "Courier New", monospace';
+    const displayScore = String(Math.floor(score)).padStart(5, '0');
+    const displayHigh = String(Math.floor(highScore)).padStart(5, '0');
+    ctx.fillText(`HI ${displayHigh}  ${displayScore}`, canvas.width - 190, 35);
+
+    // 狀態文字提示
+    if (gameState === 'START') {
+      ctx.fillText('按下 [Space] 或 [↑] 開始遊戲', canvas.width / 2 - 160, 110);
+    } else if (gameState === 'GAMEOVER') {
+      ctx.fillText('G A M E   O V E R', canvas.width / 2 - 100, 100);
+      ctx.font = '14px "Courier New", monospace';
+      ctx.fillText('按下 [Space] 重新開始', canvas.width / 2 - 80, 130);
+    }
+  }
+
+  function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  loop();
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>沙沙dino jump game</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    body {
+      background-color: #f7f7f7;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Courier New', Courier, monospace;
+      color: #535353;
+      transition: background-color 0.5s, color 0.5s;
+    }
+    body.night {
+      background-color: #202124;
+      color: #e8eaed;
+    }
+    #game-container {
+      position: relative;
+      width: 100%;
+      max-width: 800px;
+      padding: 20px;
+    }
+    canvas {
+      background-color: transparent;
+      display: block;
+      margin: 0 auto;
       border-bottom: 2px solid #535353;
       max-width: 100%;
     }
