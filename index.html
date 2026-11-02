@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>沙沙dino jump game</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+    body {
+      background-color: #f7f7f7;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      font-family: 'Courier New', Courier, monospace;
+      color: #535353;
+      transition: background-color 0.5s, color 0.5s;
+    }
+    body.night {
+      background-color: #202124;
+      color: #e8eaed;
+    }
+    #game-container {
+      position: relative;
+      width: 100%;
+      max-width: 800px;
+      padding: 20px;
+    }
+    canvas {
+      background-color: transparent;
+      display: block;
+      margin: 0 auto;
+      border-bottom: 2px solid #535353;
+      max-width: 100%;
+    }
+    body.night canvas {
+      border-bottom-color: #e8eaed;
+    }
+    #ui-panel {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    #controls-info {
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    #leaderboard-box {
+      background: rgba(0, 0, 0, 0.05);
+      padding: 10px 15px;
+      border-radius: 6px;
+      min-width: 200px;
+      font-size: 13px;
+    }
+    body.night #leaderboard-box {
+      background: rgba(255, 255, 255, 0.1);
+    }
+    #leaderboard-box h4 {
+      margin-bottom: 5px;
+      border-bottom: 1px solid currentColor;
+      padding-bottom: 3px;
+    }
+    #leaderboard-list {
+      list-style: none;
+    }
+    #leaderboard-list li {
+      display: flex;
+      justify-content: space-between;
+      margin: 3px 0;
+    }
+    #name-modal {
+      display: none;
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #fff;
+      color: #333;
+      padding: 20px;
+      border: 2px solid #535353;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      text-align: center;
+      z-index: 10;
+    }
+    #name-modal input {
+      padding: 8px;
+      margin: 10px 0;
+      font-size: 16px;
+      font-family: inherit;
+      width: 80%;
+      text-align: center;
+    }
+    #name-modal button {
+      padding: 8px 16px;
+      font-size: 14px;
+      font-family: inherit;
+      cursor: pointer;
+      background: #535353;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="game-container">
+  <canvas id="gameCanvas" width="800" height="250"></canvas>
+  
+  <div id="ui-panel">
+    <div id="controls-info">
+      <p>操作方式：</p>
+      <p>[Space] / [↑] / 點擊螢幕：跳躍</p>
+      <p>[↓] 按住：蹲下</p>
+    </div>
+    <div id="leaderboard-box">
+      <h4>🏆 全域前 5 名排行榜</h4>
+      <ol id="leaderboard-list">
+        <li>載入中...</li>
+      </ol>
+    </div>
+  </div>
+
+  <div id="name-modal">
+    <h3>創下新紀錄！</h3>
+    <p>請輸入您的名字以登錄排行榜：</p>
+    <input type="text" id="player-name-input" maxlength="10" placeholder="您的名字">
+    <br>
+    <button id="submit-name-btn">確認送出</button>
+  </div>
+</div>
+
+<script type="module">
+  // 引入 Firebase SDK
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+  // 您的 Firebase 設定
+  const firebaseConfig = {
+    apiKey: "AIzaSyBZ9s5Ku8aEzaVEmk_7ztbIiHXI6qmz5H0",
+    authDomain: "my-project-zack0512.firebaseapp.com",
+    databaseURL: "https://my-project-zack0512-default-rtdb.firebaseio.com",
+    projectId: "my-project-zack0512",
+    storageBucket: "my-project-zack0512.firebasestorage.app",
+    messagingSenderId: "972310414233",
+    appId: "1:972310414233:web:4014908a1e187754530908",
+    measurementId: "G-YKEN22N04Y"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const leaderboardRef = ref(db, 'leaderboard');
+
+  // 全域變數與遊戲狀態
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const nameModal = document.getElementById('name-modal');
+  const nameInput = document.getElementById('player-name-input');
+  const submitBtn = document.getElementById('submit-name-btn');
+  const leaderboardList = document.getElementById('leaderboard-list');
+
+  let gameState = 'START'; // START, PLAYING, GAMEOVER
+  let score = 0;
+  let highScore = 0;
+  let globalScores = [];
+  let currentSpeed = 6;
+  const initialSpeed = 6;
+  const maxSpeed = 22;
+  let isNight = false;
+  let frameCount = 0;
+
+  // Web Audio API
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function playSound(freq, type, duration) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  }
+
+  function playJumpSound() { playSound(400, 'square', 0.1); }
+  function playHitSound() { playSound(150, 'sawtooth', 0.25); }
+  function playScoreSound() { playSound(800, 'sine', 0.15); }
+
+  // 恐龍物件
+  const dino = {
+    x: 50,
+    y: 190,
+    width: 40,
+    height: 44,
+    velocityY: 0,
+    gravity: 0.6,
+    jumpPower: -11,
+    isGrounded: true,
+    isDucking: false,
+    draw() {
+      ctx.fillStyle = isNight ? '#e8eaed' : '#535353';
+      if (this.isDucking && this.isGrounded) {
+        // 蹲下像素形狀
+        ctx.fillRect(this.x, 210, 50, 24);
+        ctx.fillRect(this.x + 35, 204, 15, 10);
+      } else {
+        // 站立像素形狀
+        ctx.fillRect(this.x, this.y, 30, 44);
+        ctx.fillRect(this.x + 20, this.y, 20, 18); // 頭部
+        ctx.fillRect(this.x + 35, this.y + 4, 4, 4); // 眼睛
+      }
+    },
+    jump() {
+      if (this.isGrounded) {
+        this.velocityY = this.jumpPower;
+        this.isGrounded = false;
+        playJumpSound();
+      }
+    },
+    update() {
+      if (!this.isGrounded) {
+        this.velocityY += this.gravity;
+        this.y += this.velocityY;
+        if (this.y >= 190) {
+          this.y = 190;
+          this.velocityY = 0;
+          this.isGrounded = true;
+        }
+      }
+    }
+  };
+
+  // 障礙物管理
+  let obstacles = [];
+  function spawnObstacle() {
+    const type = Math.random() < 0.7 ? 'CACTUS' : 'BIRD';
+    if (type === 'CACTUS') {
+      obstacles.push({
+        x: canvas.width,
+        y: 194,
+        width: 20,
+        height: 40,
+        type: 'CACTUS'
+      });
+    } else {
+      const birdY = Math.random() < 0.5 ? 150 : 185;
+      obstacles.push({
+        x: canvas.width,
+        y: birdY,
+        width: 34,
+        height: 24,
+        type: 'BIRD'
+      });
+    }
+  }
+
+  // Firebase 監聽排行榜
+  onValue(leaderboardRef, (snapshot) => {
+    const data = snapshot.val();
+    globalScores = [];
+    if (data) {
+      Object.keys(data).forEach(key => {
+        globalScores.push(data[key]);
+      });
+      globalScores.sort((a, b) => b.score - a.score);
+    }
+    updateLeaderboardUI();
+    if (globalScores.length > 0) {
+      highScore = globalScores[0].score;
+    }
+  });
+
+  function updateLeaderboardUI() {
+    leaderboardList.innerHTML = '';
+    const top5 = globalScores.slice(0, 5);
+    if (top5.length === 0) {
+      leaderboardList.innerHTML = '<li>尚未有紀錄</li>';
+      return;
+    }
+    top5.forEach((item, index) => {
+      const li = document.createElement('li');
+      li.innerHTML = `<span>${index + 1}. ${item.name}</span><span>${String(item.score).padStart(5, '0')}</span>`;
+      leaderboardList.appendChild(li);
+    });
+  }
+
+  // 鍵盤與觸控事件
+  const keys = {};
+  window.addEventListener('keydown', (e) => {
+    keys[e.code] = true;
+    if ((e.code === 'Space' || e.code === 'ArrowUp') && gameState === 'PLAYING') {
+      dino.jump();
+    }
+    if (e.code === 'ArrowDown' && gameState === 'PLAYING') {
+      dino.isDucking = true;
+    }
+    if ((e.code === 'Space' || e.code === 'Enter') && gameState === 'START') {
+      resetGame();
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    keys[e.code] = false;
+    if (e.code === 'ArrowDown') {
+      dino.isDucking = false;
+    }
+  });
+
+  canvas.addEventListener('touchstart', () => {
+    if (gameState === 'PLAYING') dino.jump();
+    if (gameState === 'START') resetGame();
+  });
+
+  // 遊戲主要重設與碰撞判斷
+  function resetGame() {
+    score = 0;
+    currentSpeed = initialSpeed;
+    obstacles = [];
+    gameState = 'PLAYING';
+    isNight = false;
+    document.body.classList.remove('night');
+  }
+
+  function checkCollision(dinoObj, obs) {
+    const dinoHitbox = dinoObj.isDucking && dinoObj.isGrounded
+      ? { x: dinoObj.x, y: 210, width: 50, height: 24 }
+      : { x: dinoObj.x, y: dinoObj.y, width: dinoObj.width, height: dinoObj.height };
+
+    return (
+      dinoHitbox.x < obs.x + obs.width &&
+      dinoHitbox.x + dinoHitbox.width > obs.x &&
+      dinoHitbox.y < obs.y + obs.height &&
+      dinoHitbox.y + dinoHitbox.height > obs.y
+    );
+  }
+
+  function handleGameOver() {
+    gameState = 'GAMEOVER';
+    playHitSound();
+
+    const currentScoreInt = Math.floor(score);
+    const savedName = localStorage.getItem('pixel_runner_username') || '';
+    nameInput.value = savedName;
+
+    // 判斷是否上榜前 5 名
+    const isTopScore = globalScores.length < 5 || currentScoreInt > (globalScores[4]?.score || 0);
+
+    if (isTopScore && currentScoreInt > 0) {
+      nameModal.style.display = 'block';
+    }
+  }
+
+  submitBtn.addEventListener('click', () => {
+    const name = nameInput.value.trim() || '無名氏';
+    localStorage.setItem('pixel_runner_username', name);
+    const currentScoreInt = Math.floor(score);
+    
+    // 寫入 Firebase
+    const newScoreRef = ref(db, 'leaderboard/' + Date.now());
+    set(newScoreRef, {
+      name: name,
+      score: currentScoreInt
+    });
+
+    nameModal.style.display = 'none';
+  });
+
+  // 繪製與主循環
+  function update() {
+    frameCount++;
+
+    if (gameState === 'PLAYING') {
+      // 隨分數連貫加速
+      const currentScoreInt = Math.floor(score);
+      currentSpeed = Math.min(initialSpeed + currentScoreInt * 0.008, maxSpeed);
+
+      score += 0.15;
+      const updatedScoreInt = Math.floor(score);
+
+      if (updatedScoreInt > 0 && updatedScoreInt % 100 === 0 && Math.floor(score - 0.15) % 100 !== 0) {
+        playScoreSound();
+      }
+
+      // 日夜切換
+      if (updatedScoreInt > 0 && updatedScoreInt % 500 === 0) {
+        isNight = Math.floor(updatedScoreInt / 500) % 2 === 1;
+        if (isNight) document.body.classList.add('night');
+        else document.body.classList.remove('night');
+      }
+
+      dino.update();
+
+      // 障礙物生成與移動
+      if (frameCount % Math.max(40, Math.floor(120 - currentSpeed * 3)) === 0) {
+        if (Math.random() < 0.6) spawnObstacle();
+      }
+
+      for (let i = obstacles.length - 1; i >= 0; i--) {
+        obstacles[i].x -= currentSpeed;
+
+        if (checkCollision(dino, obstacles[i])) {
+          handleGameOver();
+        }
+
+        if (obstacles[i].x + obstacles[i].width < 0) {
+          obstacles.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 繪製恐龍與障礙物
+    dino.draw();
+
+    ctx.fillStyle = isNight ? '#e8eaed' : '#535353';
+    obstacles.forEach(obs => {
+      if (obs.type === 'CACTUS') {
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+      } else {
+        ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+        ctx.fillRect(obs.x - 6, obs.y + 6, 8, 6); // 鳥翅膀
+      }
+    });
+
+    // 繪製分數 (純整數格式)
+    ctx.font = '20px "Courier New", monospace';
+    const displayScore = String(Math.floor(score)).padStart(5, '0');
+    const displayHigh = String(Math.floor(highScore)).padStart(5, '0');
+    ctx.fillText(`HI ${displayHigh}  ${displayScore}`, canvas.width - 180, 30);
+
+    // 提示文字
+    if (gameState === 'START') {
+      ctx.fillText('按下 [Space] 或 [↑] 開始遊戲', canvas.width / 2 - 160, canvas.height / 2);
+    } else if (gameState === 'GAMEOVER') {
+      ctx.fillText('G A M E   O V E R', canvas.width / 2 - 100, canvas.height / 2 - 20);
+      ctx.font = '14px "Courier New", monospace';
+      ctx.fillText('按下 [Space] 重新開始', canvas.width / 2 - 80, canvas.height / 2 + 15);
+    }
+  }
+
+  function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  loop();
+</script>
+</body>
+</html>
