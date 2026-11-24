@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>沙沙dino jump game</title>
+  <title>沙沙dino jump game 🎮 世界地標環遊版</title>
   <style>
     * {
       box-sizing: border-box;
@@ -196,6 +196,7 @@
       <p>• [↓] 按住：蹲下避開高空飛鳥</p>
       <p>• <b>極限擦身</b>：貼近障礙起跳觸發 COMBO 加分</p>
       <p>• <b>流星許願</b>：流星雨之夜跳躍獲 +50 分</p>
+      <p>• <b>地標巡禮</b>：每突破 100 分出現一座世界地標</p>
       
       <h4 style="margin-top: 10px;">🦖 恐龍造型（達成條件自動解鎖）</h4>
       <div id="skin-selector">
@@ -405,11 +406,10 @@
   }
 
   // ==========================================
-  // 雙層視差背景：世界知名都市地標 + 雲朵 + 起伏地形
+  // 雙層視差背景：每 100 分出現一座世界地標 + 一般大樓
   // ==========================================
   const groundOffset = 210;
 
-  // 地標輪替池（確保各種都市地標依序豐富出現）
   const LANDMARK_TYPES = [
     'TAIPEI_101',     // 台北 101
     'EIFFEL',         // 巴黎艾菲爾鐵塔
@@ -420,17 +420,16 @@
     'PYRAMIDS'        // 埃及金字塔
   ];
   let landmarkQueue = [...LANDMARK_TYPES];
-  let buildingsSinceLastLandmark = 0;
+  let nextLandmarkScore = 100; // 下一個觸發地標的分數門檻
+  let pendingLandmark = false; // 是否有排隊等待生成的地標
 
-  function createCityElement(startX) {
-    buildingsSinceLastLandmark++;
-    // 每隔 2～3 棟普通大樓就插入一座世界地標
-    if (buildingsSinceLastLandmark >= 3) {
-      buildingsSinceLastLandmark = 0;
+  function createCityElement(startX, forceNormal = false) {
+    // 只有當分數跨越 100 的倍數（pendingLandmark 為 true）且非強制普通建築時，才生成地標
+    if (!forceNormal && pendingLandmark) {
+      pendingLandmark = false;
       if (landmarkQueue.length === 0) {
         landmarkQueue = [...LANDMARK_TYPES];
       }
-      // 隨機挑選尚未出現的地標
       const idx = Math.floor(Math.random() * landmarkQueue.length);
       const type = landmarkQueue.splice(idx, 1)[0];
 
@@ -467,12 +466,17 @@
   }
 
   let cityBuildings = [];
-  let nextCityX = 20;
-  while (nextCityX < canvas.width + 250) {
-    const item = createCityElement(nextCityX);
-    cityBuildings.push(item);
-    nextCityX += item.width + 8 + Math.floor(Math.random() * 14);
+  function initCityBuildings() {
+    cityBuildings = [];
+    let nextCityX = 20;
+    while (nextCityX < canvas.width + 250) {
+      // 開場畫面只放普通大樓，等跑滿 100 分才開始出現地標
+      const item = createCityElement(nextCityX, true);
+      cityBuildings.push(item);
+      nextCityX += item.width + 10 + Math.floor(Math.random() * 16);
+    }
   }
+  initCityBuildings();
 
   let clouds = Array.from({length: 4}, (_, i) => ({
     x: 150 + i * 220 + Math.random() * 60,
@@ -508,75 +512,58 @@
       ctx.fillStyle = cityColor;
 
       if (b.type === 'TAIPEI_101') {
-        // 🇹🇼 台北 101：底座 + 6 節竹節倒梯形結構 + 頂端尖塔
-        ctx.fillRect(bx + 6, groundOffset - 22, 26, 22); // 底座裙樓
+        ctx.fillRect(bx + 6, groundOffset - 22, 26, 22);
         for (let i = 0; i < 6; i++) {
           const segY = groundOffset - 32 - i * 10;
           ctx.fillRect(bx + 8, segY, 22, 8);
-          ctx.fillRect(bx + 10, segY + 8, 18, 2); // 竹節內縮處
-          // 夜間綠/黃竹節燈飾
+          ctx.fillRect(bx + 10, segY + 8, 18, 2);
           if (isNight) {
             ctx.fillStyle = i % 2 === 0 ? 'rgba(105, 240, 174, 0.45)' : 'rgba(255, 238, 88, 0.45)';
             ctx.fillRect(bx + 12, segY + 2, 14, 2);
             ctx.fillStyle = cityColor;
           }
         }
-        // 頂端觀景台與避雷針尖塔
         ctx.fillRect(bx + 13, groundOffset - 98, 12, 6);
         ctx.fillRect(bx + 17, groundOffset - 114, 4, 16);
         ctx.fillRect(bx + 18, groundOffset - 122, 2, 8);
 
       } else if (b.type === 'EIFFEL') {
-        // 🇫🇷 巴黎艾菲爾鐵塔：四腳拱門 + 兩層平台 + 細長塔尖
-        // 左腳與右腳
         ctx.fillRect(bx + 2, groundOffset - 14, 10, 14);
         ctx.fillRect(bx + 36, groundOffset - 14, 10, 14);
         ctx.fillRect(bx + 6, groundOffset - 28, 10, 14);
         ctx.fillRect(bx + 32, groundOffset - 28, 10, 14);
-        // 第一層觀景平台
         ctx.fillRect(bx + 6, groundOffset - 32, 36, 4);
-        // 中段塔身
         ctx.fillRect(bx + 12, groundOffset - 56, 24, 24);
         ctx.fillStyle = bgColor;
-        ctx.fillRect(bx + 19, groundOffset - 52, 10, 18); // 塔身中空透視
+        ctx.fillRect(bx + 19, groundOffset - 52, 10, 18);
         ctx.fillStyle = cityColor;
-        // 第二層觀景平台
         ctx.fillRect(bx + 12, groundOffset - 60, 24, 4);
-        // 上段塔身與頂端天線
         ctx.fillRect(bx + 17, groundOffset - 86, 14, 26);
         ctx.fillRect(bx + 20, groundOffset - 104, 8, 18);
         ctx.fillRect(bx + 23, groundOffset - 116, 2, 12);
 
       } else if (b.type === 'TOKYO_TOWER') {
-        // 🇯🇵 東京鐵塔：寬底座 + 大展望台 + 特別展望台 + 紅白相間燈光
         ctx.fillRect(bx + 2, groundOffset - 16, 12, 16);
         ctx.fillRect(bx + 30, groundOffset - 16, 12, 16);
         ctx.fillRect(bx + 8, groundOffset - 38, 28, 22);
         ctx.fillStyle = bgColor;
         ctx.fillRect(bx + 15, groundOffset - 32, 14, 16);
         ctx.fillStyle = cityColor;
-        // 大展望台
         ctx.fillRect(bx + 10, groundOffset - 44, 24, 6);
-        // 上層塔身
         ctx.fillRect(bx + 15, groundOffset - 76, 14, 32);
-        // 特別展望台
         ctx.fillRect(bx + 14, groundOffset - 81, 16, 5);
-        // 塔尖天線
         ctx.fillRect(bx + 19, groundOffset - 102, 6, 21);
         ctx.fillRect(bx + 21, groundOffset - 116, 2, 14);
-        // 東京鐵塔標誌性橘紅燈光點綴
         ctx.fillStyle = isNight ? 'rgba(255, 110, 64, 0.55)' : 'rgba(216, 67, 21, 0.25)';
         ctx.fillRect(bx + 12, groundOffset - 42, 20, 2);
         ctx.fillRect(bx + 16, groundOffset - 79, 12, 2);
 
       } else if (b.type === 'EMPIRE_STATE') {
-        // 🇺🇸 紐約帝國大廈：階梯式退縮摩天樓
         ctx.fillRect(bx + 2, groundOffset - 24, 32, 24);
         ctx.fillRect(bx + 6, groundOffset - 56, 24, 32);
         ctx.fillRect(bx + 9, groundOffset - 88, 18, 32);
         ctx.fillRect(bx + 13, groundOffset - 100, 10, 12);
         ctx.fillRect(bx + 17, groundOffset - 118, 2, 18);
-        // 垂直窗戶線條
         ctx.fillStyle = accentColor;
         for (let wy = groundOffset - 82; wy < groundOffset - 10; wy += 8) {
           ctx.fillRect(bx + 12, wy, 2, 4);
@@ -585,50 +572,39 @@
         }
 
       } else if (b.type === 'BIG_BEN') {
-        // 🇬🇧 倫敦大笨鐘：鐘樓主體 + 大時鐘面 + 哥德尖頂
         ctx.fillRect(bx + 4, groundOffset - 68, 20, 68);
-        ctx.fillRect(bx + 2, groundOffset - 86, 24, 18); // 鐘面突出的閣樓
-        // 時鐘錶盤
+        ctx.fillRect(bx + 2, groundOffset - 86, 24, 18);
         ctx.fillStyle = isNight ? 'rgba(255, 245, 157, 0.65)' : bgColor;
         ctx.fillRect(bx + 8, groundOffset - 82, 12, 10);
         ctx.fillStyle = cityColor;
-        ctx.fillRect(bx + 13, groundOffset - 80, 2, 4); // 時針
-        ctx.fillRect(bx + 13, groundOffset - 77, 4, 2); // 分針
-        // 尖頂
+        ctx.fillRect(bx + 13, groundOffset - 80, 2, 4);
+        ctx.fillRect(bx + 13, groundOffset - 77, 4, 2);
         ctx.fillRect(bx + 6, groundOffset - 94, 16, 8);
         ctx.fillRect(bx + 10, groundOffset - 102, 8, 8);
         ctx.fillRect(bx + 13, groundOffset - 110, 2, 8);
 
       } else if (b.type === 'SYDNEY_OPERA') {
-        // 🇦🇺 雪梨歌劇院：基座平台 + 三組貝殼風帆屋頂
         ctx.fillRect(bx + 2, groundOffset - 10, 64, 10);
-        // 第一組大貝殼
         ctx.fillRect(bx + 8, groundOffset - 22, 22, 12);
         ctx.fillRect(bx + 12, groundOffset - 32, 14, 10);
         ctx.fillRect(bx + 16, groundOffset - 38, 6, 6);
-        // 第二組中貝殼
         ctx.fillRect(bx + 28, groundOffset - 20, 20, 10);
         ctx.fillRect(bx + 32, groundOffset - 28, 12, 8);
         ctx.fillRect(bx + 36, groundOffset - 33, 5, 5);
-        // 第三組小貝殼
         ctx.fillRect(bx + 46, groundOffset - 17, 16, 7);
         ctx.fillRect(bx + 50, groundOffset - 22, 8, 5);
 
       } else if (b.type === 'PYRAMIDS') {
-        // 🇪🇬 埃及吉薩金字塔群：一大一小階梯金字塔
-        // 大金字塔
         for (let step = 0; step < 9; step++) {
           const w = 48 - step * 5;
           ctx.fillRect(bx + 2 + step * 2.5, groundOffset - (step + 1) * 5, w, 5);
         }
-        // 小金字塔
         for (let step = 0; step < 6; step++) {
           const w = 32 - step * 5;
           ctx.fillRect(bx + 42 + step * 2.5, groundOffset - (step + 1) * 5, w, 5);
         }
 
       } else {
-        // 普通都市大樓
         const by = groundOffset - b.height;
         ctx.fillRect(bx, by, b.width, b.height);
 
@@ -1012,6 +988,9 @@
     shootingStars = [];
     floatingTexts = [];
     nearMissCombo = 0;
+    nextLandmarkScore = 100;
+    pendingLandmark = false;
+    initCityBuildings();
     dino.y = 164;
     dino.velocityY = 0;
     dino.isGrounded = true;
@@ -1119,6 +1098,12 @@
       stats.totalScore += 0.15;
       const updatedScoreInt = Math.floor(score);
 
+      // 每突破 100 分里程碑，排入一座世界地標
+      if (updatedScoreInt >= nextLandmarkScore) {
+        pendingLandmark = true;
+        nextLandmarkScore += 100;
+      }
+
       if (updatedScoreInt > 0 && updatedScoreInt % 100 === 0 && Math.floor(score - 0.15) % 100 !== 0) {
         playScoreSound();
         checkAchievements(updatedScoreInt);
@@ -1134,7 +1119,7 @@
       if (cityBuildings.length > 0 && cityBuildings[0].x + cityBuildings[0].width < -20) {
         const lastB = cityBuildings[cityBuildings.length - 1];
         cityBuildings.shift();
-        const nextItem = createCityElement(lastB.x + lastB.width + 8 + Math.floor(Math.random() * 14));
+        const nextItem = createCityElement(lastB.x + lastB.width + 10 + Math.floor(Math.random() * 16));
         cityBuildings.push(nextItem);
       }
 
@@ -1287,7 +1272,6 @@
       ctx.fillRect(s.x + 14, s.y - 4, 12, 2);
     });
 
-    // 雙層視差背景（世界地標 + 白雲）
     drawCityBackground();
     clouds.forEach(cloud => drawCloud(cloud));
 
