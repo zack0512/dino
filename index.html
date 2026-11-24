@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>沙沙dino jump game </title>
+  <title>沙沙dino jump game</title>
   <style>
     * {
       box-sizing: border-box;
@@ -113,7 +113,6 @@
       justify-content: space-between;
       margin: 4px 0;
     }
-    /* 成就解鎖彈出橫幅 */
     #achievement-toast {
       position: fixed;
       top: 20px;
@@ -347,9 +346,9 @@
   }
 
   // ==========================================
-  // 天氣與特殊事件系統 (晴天 / 雷雨天 / 流星雨之夜 / 火山隕石)
+  // 天氣與特殊事件系統
   // ==========================================
-  let weather = 'CLEAR'; // 'CLEAR' | 'RAIN' | 'METEOR_SHOWER' | 'VOLCANO'
+  let weather = 'CLEAR';
   let isNight = false;
   let lightningAlpha = 0;
 
@@ -360,16 +359,15 @@
     speed: 9 + Math.random() * 4
   }));
 
-  let shootingStars = []; // 流星雨之夜的流星
-  let volcanoMeteors = []; // 火山隕石雨的火球隕石
-  let floatingTexts = [];  // 浮動得分提示 (CLOSE! +20, WISH! +50)
+  let shootingStars = [];
+  let volcanoMeteors = [];
+  let floatingTexts = [];
 
   function spawnFloatingText(text, x, y, color = '#ff9800') {
     floatingTexts.push({ text, x, y, alpha: 1.0, color });
   }
 
   function updateWeatherState(currentScoreInt) {
-    // 每 400 分輪替天氣/環境階段
     const phase = Math.floor(currentScoreInt / 400) % 4;
     let targetWeather = 'CLEAR';
     let targetNight = false;
@@ -378,13 +376,12 @@
       targetWeather = 'CLEAR';
       targetNight = false;
     } else if (phase === 1) {
-      targetWeather = 'RAIN'; // 像素雷雨天
+      targetWeather = 'RAIN';
       targetNight = false;
     } else if (phase === 2) {
-      targetWeather = 'METEOR_SHOWER'; // 流星雨之夜
+      targetWeather = 'METEOR_SHOWER';
       targetNight = true;
     } else if (phase === 3) {
-      // 800 分以上才會進入火山隕石雨，否則為黑夜
       targetWeather = currentScoreInt >= 800 ? 'VOLCANO' : 'METEOR_SHOWER';
       targetNight = true;
     }
@@ -408,26 +405,73 @@
   }
 
   // ==========================================
-  // 雙層視差背景與起伏地形
+  // 雙層視差背景：世界知名都市地標 + 雲朵 + 起伏地形
   // ==========================================
   const groundOffset = 210;
 
-  let cityBuildings = [];
-  let nextCityX = 0;
-  while (nextCityX < canvas.width + 200) {
-    const w = 24 + Math.floor(Math.random() * 26);
-    const h = 25 + Math.floor(Math.random() * 55);
-    cityBuildings.push({
-      x: nextCityX,
+  // 地標輪替池（確保各種都市地標依序豐富出現）
+  const LANDMARK_TYPES = [
+    'TAIPEI_101',     // 台北 101
+    'EIFFEL',         // 巴黎艾菲爾鐵塔
+    'TOKYO_TOWER',    // 東京鐵塔
+    'EMPIRE_STATE',   // 紐約帝國大廈
+    'BIG_BEN',        // 倫敦大笨鐘
+    'SYDNEY_OPERA',   // 雪梨歌劇院
+    'PYRAMIDS'        // 埃及金字塔
+  ];
+  let landmarkQueue = [...LANDMARK_TYPES];
+  let buildingsSinceLastLandmark = 0;
+
+  function createCityElement(startX) {
+    buildingsSinceLastLandmark++;
+    // 每隔 2～3 棟普通大樓就插入一座世界地標
+    if (buildingsSinceLastLandmark >= 3) {
+      buildingsSinceLastLandmark = 0;
+      if (landmarkQueue.length === 0) {
+        landmarkQueue = [...LANDMARK_TYPES];
+      }
+      // 隨機挑選尚未出現的地標
+      const idx = Math.floor(Math.random() * landmarkQueue.length);
+      const type = landmarkQueue.splice(idx, 1)[0];
+
+      const widths = {
+        TAIPEI_101: 38,
+        EIFFEL: 48,
+        TOKYO_TOWER: 44,
+        EMPIRE_STATE: 36,
+        BIG_BEN: 28,
+        SYDNEY_OPERA: 68,
+        PYRAMIDS: 76
+      };
+      return {
+        x: startX,
+        width: widths[type] || 40,
+        type: type
+      };
+    }
+
+    // 普通現代大樓
+    const w = 24 + Math.floor(Math.random() * 24);
+    const h = 24 + Math.floor(Math.random() * 44);
+    return {
+      x: startX,
       width: w,
       height: h,
+      type: 'NORMAL',
       hasAntenna: Math.random() > 0.65,
       windows: Array.from({length: Math.floor(h / 12)}, (_, row) => ({
         row,
         lit: Math.random() > 0.4
       }))
-    });
-    nextCityX += w + Math.floor(Math.random() * 14) + 2;
+    };
+  }
+
+  let cityBuildings = [];
+  let nextCityX = 20;
+  while (nextCityX < canvas.width + 250) {
+    const item = createCityElement(nextCityX);
+    cityBuildings.push(item);
+    nextCityX += item.width + 8 + Math.floor(Math.random() * 14);
   }
 
   let clouds = Array.from({length: 4}, (_, i) => ({
@@ -453,36 +497,162 @@
     size: Math.random() > 0.5 ? 2 : 3
   }));
 
+  // 繪製世界知名都市地標與背景建築
   function drawCityBackground() {
-    const cityColor = isNight ? 'rgba(232, 234, 237, 0.12)' : 'rgba(83, 83, 83, 0.14)';
-    const windowColor = isNight ? 'rgba(255, 224, 102, 0.35)' : 'rgba(247, 247, 247, 0.6)';
+    const cityColor = isNight ? 'rgba(232, 234, 237, 0.16)' : 'rgba(83, 83, 83, 0.17)';
+    const accentColor = isNight ? 'rgba(255, 224, 102, 0.45)' : 'rgba(83, 83, 83, 0.28)';
+    const bgColor = weather === 'VOLCANO' ? '#2b1818' : (isNight ? '#202124' : '#f7f7f7');
 
     cityBuildings.forEach(b => {
-      const by = groundOffset - b.height;
+      const bx = Math.floor(b.x);
       ctx.fillStyle = cityColor;
-      ctx.fillRect(b.x, by, b.width, b.height);
 
-      if (b.hasAntenna) {
-        ctx.fillRect(b.x + Math.floor(b.width / 2) - 1, by - 10, 2, 10);
-      }
-
-      ctx.fillStyle = windowColor;
-      b.windows.forEach(win => {
-        if (win.lit) {
-          const wy = by + 6 + win.row * 10;
-          if (wy + 4 < groundOffset - 4) {
-            ctx.fillRect(b.x + 5, wy, 4, 4);
-            if (b.width > 30) {
-              ctx.fillRect(b.x + b.width - 9, wy, 4, 4);
-            }
+      if (b.type === 'TAIPEI_101') {
+        // 🇹🇼 台北 101：底座 + 6 節竹節倒梯形結構 + 頂端尖塔
+        ctx.fillRect(bx + 6, groundOffset - 22, 26, 22); // 底座裙樓
+        for (let i = 0; i < 6; i++) {
+          const segY = groundOffset - 32 - i * 10;
+          ctx.fillRect(bx + 8, segY, 22, 8);
+          ctx.fillRect(bx + 10, segY + 8, 18, 2); // 竹節內縮處
+          // 夜間綠/黃竹節燈飾
+          if (isNight) {
+            ctx.fillStyle = i % 2 === 0 ? 'rgba(105, 240, 174, 0.45)' : 'rgba(255, 238, 88, 0.45)';
+            ctx.fillRect(bx + 12, segY + 2, 14, 2);
+            ctx.fillStyle = cityColor;
           }
         }
-      });
+        // 頂端觀景台與避雷針尖塔
+        ctx.fillRect(bx + 13, groundOffset - 98, 12, 6);
+        ctx.fillRect(bx + 17, groundOffset - 114, 4, 16);
+        ctx.fillRect(bx + 18, groundOffset - 122, 2, 8);
+
+      } else if (b.type === 'EIFFEL') {
+        // 🇫🇷 巴黎艾菲爾鐵塔：四腳拱門 + 兩層平台 + 細長塔尖
+        // 左腳與右腳
+        ctx.fillRect(bx + 2, groundOffset - 14, 10, 14);
+        ctx.fillRect(bx + 36, groundOffset - 14, 10, 14);
+        ctx.fillRect(bx + 6, groundOffset - 28, 10, 14);
+        ctx.fillRect(bx + 32, groundOffset - 28, 10, 14);
+        // 第一層觀景平台
+        ctx.fillRect(bx + 6, groundOffset - 32, 36, 4);
+        // 中段塔身
+        ctx.fillRect(bx + 12, groundOffset - 56, 24, 24);
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(bx + 19, groundOffset - 52, 10, 18); // 塔身中空透視
+        ctx.fillStyle = cityColor;
+        // 第二層觀景平台
+        ctx.fillRect(bx + 12, groundOffset - 60, 24, 4);
+        // 上段塔身與頂端天線
+        ctx.fillRect(bx + 17, groundOffset - 86, 14, 26);
+        ctx.fillRect(bx + 20, groundOffset - 104, 8, 18);
+        ctx.fillRect(bx + 23, groundOffset - 116, 2, 12);
+
+      } else if (b.type === 'TOKYO_TOWER') {
+        // 🇯🇵 東京鐵塔：寬底座 + 大展望台 + 特別展望台 + 紅白相間燈光
+        ctx.fillRect(bx + 2, groundOffset - 16, 12, 16);
+        ctx.fillRect(bx + 30, groundOffset - 16, 12, 16);
+        ctx.fillRect(bx + 8, groundOffset - 38, 28, 22);
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(bx + 15, groundOffset - 32, 14, 16);
+        ctx.fillStyle = cityColor;
+        // 大展望台
+        ctx.fillRect(bx + 10, groundOffset - 44, 24, 6);
+        // 上層塔身
+        ctx.fillRect(bx + 15, groundOffset - 76, 14, 32);
+        // 特別展望台
+        ctx.fillRect(bx + 14, groundOffset - 81, 16, 5);
+        // 塔尖天線
+        ctx.fillRect(bx + 19, groundOffset - 102, 6, 21);
+        ctx.fillRect(bx + 21, groundOffset - 116, 2, 14);
+        // 東京鐵塔標誌性橘紅燈光點綴
+        ctx.fillStyle = isNight ? 'rgba(255, 110, 64, 0.55)' : 'rgba(216, 67, 21, 0.25)';
+        ctx.fillRect(bx + 12, groundOffset - 42, 20, 2);
+        ctx.fillRect(bx + 16, groundOffset - 79, 12, 2);
+
+      } else if (b.type === 'EMPIRE_STATE') {
+        // 🇺🇸 紐約帝國大廈：階梯式退縮摩天樓
+        ctx.fillRect(bx + 2, groundOffset - 24, 32, 24);
+        ctx.fillRect(bx + 6, groundOffset - 56, 24, 32);
+        ctx.fillRect(bx + 9, groundOffset - 88, 18, 32);
+        ctx.fillRect(bx + 13, groundOffset - 100, 10, 12);
+        ctx.fillRect(bx + 17, groundOffset - 118, 2, 18);
+        // 垂直窗戶線條
+        ctx.fillStyle = accentColor;
+        for (let wy = groundOffset - 82; wy < groundOffset - 10; wy += 8) {
+          ctx.fillRect(bx + 12, wy, 2, 4);
+          ctx.fillRect(bx + 17, wy, 2, 4);
+          ctx.fillRect(bx + 22, wy, 2, 4);
+        }
+
+      } else if (b.type === 'BIG_BEN') {
+        // 🇬🇧 倫敦大笨鐘：鐘樓主體 + 大時鐘面 + 哥德尖頂
+        ctx.fillRect(bx + 4, groundOffset - 68, 20, 68);
+        ctx.fillRect(bx + 2, groundOffset - 86, 24, 18); // 鐘面突出的閣樓
+        // 時鐘錶盤
+        ctx.fillStyle = isNight ? 'rgba(255, 245, 157, 0.65)' : bgColor;
+        ctx.fillRect(bx + 8, groundOffset - 82, 12, 10);
+        ctx.fillStyle = cityColor;
+        ctx.fillRect(bx + 13, groundOffset - 80, 2, 4); // 時針
+        ctx.fillRect(bx + 13, groundOffset - 77, 4, 2); // 分針
+        // 尖頂
+        ctx.fillRect(bx + 6, groundOffset - 94, 16, 8);
+        ctx.fillRect(bx + 10, groundOffset - 102, 8, 8);
+        ctx.fillRect(bx + 13, groundOffset - 110, 2, 8);
+
+      } else if (b.type === 'SYDNEY_OPERA') {
+        // 🇦🇺 雪梨歌劇院：基座平台 + 三組貝殼風帆屋頂
+        ctx.fillRect(bx + 2, groundOffset - 10, 64, 10);
+        // 第一組大貝殼
+        ctx.fillRect(bx + 8, groundOffset - 22, 22, 12);
+        ctx.fillRect(bx + 12, groundOffset - 32, 14, 10);
+        ctx.fillRect(bx + 16, groundOffset - 38, 6, 6);
+        // 第二組中貝殼
+        ctx.fillRect(bx + 28, groundOffset - 20, 20, 10);
+        ctx.fillRect(bx + 32, groundOffset - 28, 12, 8);
+        ctx.fillRect(bx + 36, groundOffset - 33, 5, 5);
+        // 第三組小貝殼
+        ctx.fillRect(bx + 46, groundOffset - 17, 16, 7);
+        ctx.fillRect(bx + 50, groundOffset - 22, 8, 5);
+
+      } else if (b.type === 'PYRAMIDS') {
+        // 🇪🇬 埃及吉薩金字塔群：一大一小階梯金字塔
+        // 大金字塔
+        for (let step = 0; step < 9; step++) {
+          const w = 48 - step * 5;
+          ctx.fillRect(bx + 2 + step * 2.5, groundOffset - (step + 1) * 5, w, 5);
+        }
+        // 小金字塔
+        for (let step = 0; step < 6; step++) {
+          const w = 32 - step * 5;
+          ctx.fillRect(bx + 42 + step * 2.5, groundOffset - (step + 1) * 5, w, 5);
+        }
+
+      } else {
+        // 普通都市大樓
+        const by = groundOffset - b.height;
+        ctx.fillRect(bx, by, b.width, b.height);
+
+        if (b.hasAntenna) {
+          ctx.fillRect(bx + Math.floor(b.width / 2) - 1, by - 10, 2, 10);
+        }
+
+        ctx.fillStyle = accentColor;
+        b.windows.forEach(win => {
+          if (win.lit) {
+            const wy = by + 6 + win.row * 10;
+            if (wy + 4 < groundOffset - 4) {
+              ctx.fillRect(bx + 5, wy, 4, 4);
+              if (b.width > 30) {
+                ctx.fillRect(bx + b.width - 9, wy, 4, 4);
+              }
+            }
+          }
+        });
+      }
     });
   }
 
   function drawCloud(cloud) {
-    // 雷雨天雲朵變深灰烏雲
     if (weather === 'RAIN') {
       ctx.fillStyle = '#757575';
     } else {
@@ -585,7 +755,6 @@
         ctx.fillStyle = bgColor;
         ctx.fillRect(this.x + 50, dy + 6, 2, 2);
 
-        // 蹲下時的墨鏡配件
         if (skin === 'COOL') {
           ctx.fillStyle = '#111';
           ctx.fillRect(this.x + 48, dy + 5, 8, 4);
@@ -601,7 +770,6 @@
         const dx = this.x;
         const dy = this.y;
 
-        // 頭部與嘴巴
         ctx.fillRect(dx + 22, dy, 22, 18);
         if (isDead) {
           ctx.fillRect(dx + 26, dy + 14, 16, 3);
@@ -609,20 +777,17 @@
           ctx.fillRect(dx + 26, dy + 12, 18, 4);
         }
 
-        // 眼睛與造型配件
         if (isDead) {
           ctx.fillStyle = bgColor;
           ctx.fillRect(dx + 25, dy + 3, 6, 6);
           ctx.fillStyle = color;
           ctx.fillRect(dx + 27, dy + 5, 2, 2);
         } else if (skin === 'COOL') {
-          // 墨鏡酷龍
           ctx.fillStyle = '#111';
           ctx.fillRect(dx + 24, dy + 3, 20, 5);
           ctx.fillStyle = '#fff';
           ctx.fillRect(dx + 27, dy + 4, 2, 2);
         } else if (skin === 'CYBER') {
-          // 機械暴龍紅色電子眼
           ctx.fillStyle = '#ff1744';
           ctx.fillRect(dx + 26, dy + 4, 5, 3);
         } else {
@@ -630,21 +795,18 @@
           ctx.fillRect(dx + 26, dy + 4, 3, 3);
         }
 
-        // 紳士高禮帽配件
         if (skin === 'GENTLEMAN') {
           ctx.fillStyle = isNight ? '#ffd54f' : '#212121';
           ctx.fillRect(dx + 22, dy - 3, 20, 3);
           ctx.fillRect(dx + 26, dy - 12, 12, 9);
         }
 
-        // 軀幹與尾巴
         ctx.fillStyle = color;
         ctx.fillRect(dx + 10, dy + 14, 20, 20);
         ctx.fillRect(dx + 4, dy + 18, 6, 12);
         ctx.fillRect(dx, dy + 22, 4, 6);
         ctx.fillRect(dx + 28, dy + 22, 4, 4);
 
-        // 機械暴龍裝甲紋路
         if (skin === 'CYBER') {
           ctx.fillStyle = bgColor;
           ctx.fillRect(dx + 14, dy + 18, 10, 2);
@@ -652,7 +814,6 @@
           ctx.fillStyle = color;
         }
 
-        // 腳部
         if (!this.isGrounded || isDead) {
           ctx.fillRect(dx + 12, dy + 34, 4, 10);
           ctx.fillRect(dx + 22, dy + 34, 4, 10);
@@ -675,7 +836,6 @@
         this.isGrounded = false;
         playJumpSound();
 
-        // 檢查是否處於「流星雨之夜」且天上有流星
         if (weather === 'METEOR_SHOWER' && shootingStars.length > 0) {
           score += 50;
           stats.totalScore += 50;
@@ -862,7 +1022,6 @@
     document.body.classList.remove('night', 'meteor-mode');
   }
 
-  // 縮小後的精準碰撞判定箱
   function getDinoHitbox(dinoObj) {
     return dinoObj.isDucking && dinoObj.isGrounded
       ? { x: dinoObj.x + 8, y: 196, width: 38, height: 12 }
@@ -883,15 +1042,12 @@
     );
   }
 
-  // 連續擦身（Near Miss）偵測：剛閃過障礙物且距離極近
   function checkNearMiss(dinoObj, obs) {
     if (obs.nearMissChecked) return;
     const dinoHitbox = getDinoHitbox(dinoObj);
-    // 當障礙物剛剛通過恐龍後方
     if (obs.x + obs.width < dinoHitbox.x) {
       obs.nearMissChecked = true;
       const verticalGap = Math.abs((dinoHitbox.y + dinoHitbox.height) - obs.y);
-      // 貼近擦身條件：在空中剛擦過仙人掌頂端，或蹲下剛擦過翼龍底部
       if (verticalGap < 26) {
         nearMissCombo++;
         stats.totalNearMiss++;
@@ -904,7 +1060,7 @@
         checkAchievements(Math.floor(score));
         saveStats();
       } else {
-        nearMissCombo = 0; // 跳太高不算極限擦身，重置連擊
+        nearMissCombo = 0;
       }
     }
   }
@@ -971,25 +1127,15 @@
       updateWeatherState(updatedScoreInt);
       dino.update();
 
-      // 視差層 1：遠景城市
+      // 視差層 1：世界都市地標與建築慢速移動
       cityBuildings.forEach(b => {
         b.x -= currentSpeed * 0.15;
       });
-      if (cityBuildings.length > 0 && cityBuildings[0].x + cityBuildings[0].width < 0) {
+      if (cityBuildings.length > 0 && cityBuildings[0].x + cityBuildings[0].width < -20) {
         const lastB = cityBuildings[cityBuildings.length - 1];
-        const w = 24 + Math.floor(Math.random() * 26);
-        const h = 25 + Math.floor(Math.random() * 55);
         cityBuildings.shift();
-        cityBuildings.push({
-          x: lastB.x + lastB.width + Math.floor(Math.random() * 14) + 2,
-          width: w,
-          height: h,
-          hasAntenna: Math.random() > 0.65,
-          windows: Array.from({length: Math.floor(h / 12)}, (_, row) => ({
-            row,
-            lit: Math.random() > 0.4
-          }))
-        });
+        const nextItem = createCityElement(lastB.x + lastB.width + 8 + Math.floor(Math.random() * 14));
+        cityBuildings.push(nextItem);
       }
 
       // 視差層 2：天空雲朵
@@ -1011,7 +1157,6 @@
             r.x = Math.random() * (canvas.width + 100);
           }
         });
-        // 偶爾閃電
         if (Math.random() < 0.005) {
           lightningAlpha = 0.65;
         }
@@ -1055,7 +1200,6 @@
         m.x += m.vx;
         m.y += m.vy;
 
-        // 隕石碰撞判定
         const dBox = getDinoHitbox(dino);
         if (
           m.x - 5 < dBox.x + dBox.width &&
@@ -1106,7 +1250,6 @@
       }
     }
 
-    // 浮動文字動畫更新
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
       floatingTexts[i].y -= 0.8;
       floatingTexts[i].alpha -= 0.02;
@@ -1123,13 +1266,11 @@
     const themeColor = isNight ? '#e8eaed' : '#535353';
     const bgColor = weather === 'VOLCANO' ? '#2b1818' : (isNight ? '#202124' : '#f7f7f7');
 
-    // 閃電白光閃爍
     if (lightningAlpha > 0) {
       ctx.fillStyle = `rgba(255, 255, 255, ${lightningAlpha})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
-    // 1. 夜間月亮與繁星
     if (isNight) {
       ctx.fillStyle = '#e8eaed';
       stars.forEach(s => ctx.fillRect(s.x, s.y, s.size, s.size));
@@ -1138,7 +1279,6 @@
       ctx.fillRect(676, 36, 12, 12);
     }
 
-    // 2. 流星雨繪製
     shootingStars.forEach(s => {
       ctx.fillStyle = '#80d8ff';
       ctx.fillRect(s.x, s.y, 4, 4);
@@ -1147,11 +1287,10 @@
       ctx.fillRect(s.x + 14, s.y - 4, 12, 2);
     });
 
-    // 3. 雙層視差背景（城市剪影 + 白雲）
+    // 雙層視差背景（世界地標 + 白雲）
     drawCityBackground();
     clouds.forEach(cloud => drawCloud(cloud));
 
-    // 4. 雷雨雨滴繪製
     if (weather === 'RAIN') {
       ctx.fillStyle = isNight ? 'rgba(128, 216, 255, 0.5)' : 'rgba(83, 83, 83, 0.45)';
       rainDrops.forEach(r => {
@@ -1159,17 +1298,13 @@
       });
     }
 
-    // 5. 起伏地形與顆粒
     drawTerrain(themeColor, bgColor);
 
-    // 6. 火山隕石與地面紅色落點預警
     volcanoMeteors.forEach(m => {
-      // 地面落點閃爍紅框預警
       if (Math.floor(frameCount / 6) % 2 === 0) {
         ctx.fillStyle = '#ff1744';
         ctx.fillRect(m.targetX - 10, groundOffset - 2, 20, 4);
       }
-      // 燃燒像素隕石
       ctx.fillStyle = '#ff9100';
       ctx.fillRect(m.x + 4, m.y - 8, 8, 8);
       ctx.fillStyle = '#ff1744';
@@ -1178,14 +1313,12 @@
       ctx.fillRect(m.x - 2, m.y - 2, 4, 4);
     });
 
-    // 7. 主角與障礙物
     dino.draw();
     obstacles.forEach(obs => {
       if (obs.type === 'CACTUS') drawCactus(obs);
       else drawBird(obs);
     });
 
-    // 8. 浮動加分提示文字
     floatingTexts.forEach(ft => {
       ctx.save();
       ctx.globalAlpha = Math.max(0, ft.alpha);
@@ -1195,7 +1328,6 @@
       ctx.restore();
     });
 
-    // 9. 計分板與當前天氣標籤
     ctx.fillStyle = themeColor;
     ctx.font = '700 18px "Courier New", monospace';
     const displayScore = String(Math.floor(score)).padStart(5, '0');
@@ -1211,7 +1343,6 @@
     };
     ctx.fillText(weatherLabels[weather], 15, 25);
 
-    // 10. 狀態文字與重來圖示
     ctx.font = '700 18px "Courier New", monospace';
     if (gameState === 'START') {
       ctx.fillText('按下 [Space] 或點擊螢幕開始遊戲', canvas.width / 2 - 175, 110);
