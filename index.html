@@ -187,24 +187,137 @@
   let isNight = false;
   let frameCount = 0;
 
-  // 檢查是否正在輸入排行榜名字
   function isModalOpen() {
     return nameModal.style.display === 'block' || document.activeElement === nameInput;
   }
 
-  // 地面顆粒與星空
+  // ==========================================
+  // 1. 雙層視差背景：遠景城市建築 + 雲朵 + 起伏地形
+  // ==========================================
   const groundOffset = 210;
+
+  // 遠景城市建築剪影 (視差層 1：移動最慢)
+  let cityBuildings = [];
+  let nextCityX = 0;
+  while (nextCityX < canvas.width + 200) {
+    const w = 24 + Math.floor(Math.random() * 26);
+    const h = 25 + Math.floor(Math.random() * 55);
+    cityBuildings.push({
+      x: nextCityX,
+      width: w,
+      height: h,
+      hasAntenna: Math.random() > 0.65,
+      windows: Array.from({length: Math.floor(h / 12)}, (_, row) => ({
+        row,
+        lit: Math.random() > 0.4
+      }))
+    });
+    nextCityX += w + Math.floor(Math.random() * 14) + 2;
+  }
+
+  // 天空像素白雲 (視差層 2：慢速飄動)
+  let clouds = Array.from({length: 4}, (_, i) => ({
+    x: 150 + i * 220 + Math.random() * 60,
+    y: 45 + Math.random() * 55,
+    scale: Math.random() > 0.5 ? 1 : 0.8
+  }));
+
+  // 地面起伏地形 (土丘與坑洞，與前景同速)
+  let terrainBumps = Array.from({length: 5}, (_, i) => ({
+    x: 100 + i * 190 + Math.random() * 50,
+    type: Math.random() > 0.4 ? 'HILL' : 'PIT', // HILL: 凸起小土丘, PIT: 凹陷小坑洞
+    width: 24 + Math.floor(Math.random() * 16)
+  }));
+
+  // 地面小碎石顆粒
   let groundDots = Array.from({length: 30}, () => ({
     x: Math.random() * canvas.width,
-    y: groundOffset + 4 + Math.random() * 20,
+    y: groundOffset + 5 + Math.random() * 18,
     size: Math.random() > 0.5 ? 2 : 4
   }));
 
+  // 夜間繁星
   const stars = Array.from({length: 20}, () => ({
     x: Math.random() * canvas.width,
-    y: Math.random() * 120,
+    y: Math.random() * 110,
     size: Math.random() > 0.5 ? 2 : 3
   }));
+
+  // 繪製雙層視差城市背景
+  function drawCityBackground() {
+    const cityColor = isNight ? 'rgba(232, 234, 237, 0.12)' : 'rgba(83, 83, 83, 0.14)';
+    const windowColor = isNight ? 'rgba(255, 224, 102, 0.35)' : 'rgba(247, 247, 247, 0.6)';
+
+    cityBuildings.forEach(b => {
+      const by = groundOffset - b.height;
+      ctx.fillStyle = cityColor;
+      ctx.fillRect(b.x, by, b.width, b.height);
+
+      // 屋頂天線
+      if (b.hasAntenna) {
+        ctx.fillRect(b.x + Math.floor(b.width / 2) - 1, by - 10, 2, 10);
+      }
+
+      // 大樓小窗戶
+      ctx.fillStyle = windowColor;
+      b.windows.forEach(win => {
+        if (win.lit) {
+          const wy = by + 6 + win.row * 10;
+          if (wy + 4 < groundOffset - 4) {
+            ctx.fillRect(b.x + 5, wy, 4, 4);
+            if (b.width > 30) {
+              ctx.fillRect(b.x + b.width - 9, wy, 4, 4);
+            }
+          }
+        }
+      });
+    });
+  }
+
+  // 繪製經典 Chrome 像素白雲
+  function drawCloud(cloud) {
+    ctx.fillStyle = isNight ? 'rgba(232, 234, 237, 0.25)' : '#dcdcdc';
+    const cx = Math.floor(cloud.x);
+    const cy = Math.floor(cloud.y);
+    // 像素階梯雲朵
+    ctx.fillRect(cx + 12, cy, 16, 4);
+    ctx.fillRect(cx + 6, cy + 4, 28, 4);
+    ctx.fillRect(cx, cy + 8, 42, 6);
+    ctx.fillRect(cx + 4, cy + 14, 34, 3);
+  }
+
+  // 繪製起伏地形（地面線條 + 小土丘 + 凹坑）
+  function drawTerrain(themeColor, bgColor) {
+    ctx.fillStyle = themeColor;
+    ctx.fillRect(0, groundOffset, canvas.width, 2);
+
+    terrainBumps.forEach(bump => {
+      const bx = Math.floor(bump.x);
+      if (bump.type === 'HILL') {
+        // 先用背景色遮掉原本的平線，再畫出凸起土丘
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(bx + 2, groundOffset, bump.width - 4, 2);
+        ctx.fillStyle = themeColor;
+        ctx.fillRect(bx + 2, groundOffset - 2, 4, 2);
+        ctx.fillRect(bx + 6, groundOffset - 4, bump.width - 12, 2);
+        ctx.fillRect(bx + bump.width - 6, groundOffset - 2, 4, 2);
+      } else {
+        // 先用背景色挖空平線，再畫出凹陷坑洞
+        ctx.fillStyle = bgColor;
+        ctx.fillRect(bx + 2, groundOffset, bump.width - 4, 2);
+        ctx.fillStyle = themeColor;
+        ctx.fillRect(bx + 2, groundOffset + 2, 4, 2);
+        ctx.fillRect(bx + 6, groundOffset + 4, bump.width - 12, 2);
+        ctx.fillRect(bx + bump.width - 6, groundOffset + 2, 4, 2);
+      }
+    });
+
+    // 地面顆粒
+    ctx.fillStyle = themeColor;
+    groundDots.forEach(dot => {
+      ctx.fillRect(dot.x, dot.y, dot.size, 1);
+    });
+  }
 
   // 音效
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -226,7 +339,9 @@
   function playHitSound() { playSound(150, 'sawtooth', 0.25); }
   function playScoreSound() { playSound(850, 'sine', 0.15); }
 
-  // 精緻恐龍物件
+  // ==========================================
+  // 2. 精緻恐龍物件（含經典驚訝死法表情）
+  // ==========================================
   const dino = {
     x: 50,
     y: 164,
@@ -242,9 +357,11 @@
     draw() {
       const color = isNight ? '#e8eaed' : '#535353';
       const bgColor = isNight ? '#202124' : '#f7f7f7';
+      const isDead = gameState === 'GAMEOVER';
       ctx.fillStyle = color;
 
-      if (this.isDucking && this.isGrounded) {
+      // 存活且在地面蹲下時繪製蹲姿；死亡時彈起呈現經典驚訝表情
+      if (this.isDucking && this.isGrounded && !isDead) {
         const dy = 184;
         ctx.fillRect(this.x, dy + 10, 52, 16);
         ctx.fillRect(this.x + 36, dy + 4, 20, 12);
@@ -260,20 +377,40 @@
         const dx = this.x;
         const dy = this.y;
 
+        // 頭部與嘴巴
         ctx.fillRect(dx + 22, dy, 22, 18);
-        ctx.fillRect(dx + 26, dy + 12, 18, 4);
-        ctx.fillStyle = bgColor;
-        ctx.fillRect(dx + 26, dy + 4, 3, 3);
-        ctx.fillStyle = color;
+        if (isDead) {
+          // 死亡時嘴巴微張驚訝
+          ctx.fillRect(dx + 26, dy + 14, 16, 3);
+        } else {
+          ctx.fillRect(dx + 26, dy + 12, 18, 4);
+        }
 
+        // 眼睛繪製
+        if (isDead) {
+          // 經典驚訝死法：睜大白眼眶 + 黑色小瞳孔
+          ctx.fillStyle = bgColor;
+          ctx.fillRect(dx + 25, dy + 3, 6, 6);
+          ctx.fillStyle = color;
+          ctx.fillRect(dx + 27, dy + 5, 2, 2);
+        } else {
+          // 正常眼睛
+          ctx.fillStyle = bgColor;
+          ctx.fillRect(dx + 26, dy + 4, 3, 3);
+          ctx.fillStyle = color;
+        }
+
+        // 軀幹與尾巴
         ctx.fillRect(dx + 10, dy + 14, 20, 20);
         ctx.fillRect(dx + 4, dy + 18, 6, 12);
         ctx.fillRect(dx, dy + 22, 4, 6);
+        // 小手
         ctx.fillRect(dx + 28, dy + 22, 4, 4);
 
-        if (!this.isGrounded) {
-          ctx.fillRect(dx + 12, dy + 34, 4, 8);
-          ctx.fillRect(dx + 20, dy + 34, 4, 5);
+        // 腳部
+        if (!this.isGrounded || isDead) {
+          ctx.fillRect(dx + 12, dy + 34, 4, 10);
+          ctx.fillRect(dx + 22, dy + 34, 4, 10);
         } else {
           if (this.legFrame < 5) {
             ctx.fillRect(dx + 12, dy + 34, 4, 12);
@@ -366,6 +503,26 @@
     }
   }
 
+  // 繪製經典像素重來圖示 (↻)
+  function drawRestartIcon(x, y, themeColor, bgColor) {
+    ctx.fillStyle = themeColor;
+    // 外框圓角方塊
+    ctx.fillRect(x, y + 2, 34, 26);
+    ctx.fillRect(x + 2, y, 30, 30);
+    // 內部挖空
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(x + 3, y + 3, 28, 24);
+    // 中心旋轉箭頭
+    ctx.fillStyle = themeColor;
+    ctx.fillRect(x + 12, y + 8, 10, 3);
+    ctx.fillRect(x + 10, y + 11, 3, 8);
+    ctx.fillRect(x + 12, y + 19, 10, 3);
+    ctx.fillRect(x + 21, y + 15, 3, 4);
+    // 箭頭尖端
+    ctx.fillRect(x + 20, y + 6, 3, 7);
+    ctx.fillRect(x + 23, y + 8, 2, 3);
+  }
+
   // Firebase 排行榜數據
   onValue(leaderboardRef, (snapshot) => {
     const data = snapshot.val();
@@ -396,9 +553,8 @@
     });
   }
 
-  // 統一觸發跳躍 / 開始 / 重新開始
   function handlePrimaryAction() {
-    if (isModalOpen()) return; // 正在輸入名字時不觸發
+    if (isModalOpen()) return;
 
     if (gameState === 'PLAYING') {
       dino.jump();
@@ -407,12 +563,11 @@
     }
   }
 
-  // 鍵盤操作監聽
   window.addEventListener('keydown', (e) => {
-    if (isModalOpen()) return; // 正在輸入名字時不攔截空白鍵
+    if (isModalOpen()) return;
 
     if (e.code === 'Space' || e.code === 'ArrowUp') {
-      e.preventDefault(); // 防止空白鍵捲動網頁
+      e.preventDefault();
       handlePrimaryAction();
     }
     if (e.code === 'ArrowDown' && gameState === 'PLAYING') {
@@ -426,7 +581,6 @@
     }
   });
 
-  // 觸控螢幕與滑鼠點擊監聽
   canvas.addEventListener('touchstart', (e) => {
     if (isModalOpen()) return;
     e.preventDefault();
@@ -435,7 +589,7 @@
 
   canvas.addEventListener('mousedown', (e) => {
     if (isModalOpen()) return;
-    if (e.button === 0) { // 左鍵點擊
+    if (e.button === 0) {
       handlePrimaryAction();
     }
   });
@@ -453,37 +607,15 @@
     document.body.classList.remove('night');
   }
 
-  // 縮小後的精準碰撞判定箱 (Hitbox)
+  // 縮小後的精準碰撞判定箱
   function checkCollision(dinoObj, obs) {
-    // 恐龍判定框：內縮寬度與高度，避免尾巴、嘴尖或腳跟的透明區域誤判
     const dinoHitbox = dinoObj.isDucking && dinoObj.isGrounded
-      ? {
-          x: dinoObj.x + 8,
-          y: 196,
-          width: 38,
-          height: 12
-        }
-      : {
-          x: dinoObj.x + 12,
-          y: dinoObj.y + 8,
-          width: 22,
-          height: 32
-        };
+      ? { x: dinoObj.x + 8, y: 196, width: 38, height: 12 }
+      : { x: dinoObj.x + 12, y: dinoObj.y + 8, width: 22, height: 32 };
 
-    // 障礙物判定框：左右上下各內縮一點
     const obsHitbox = obs.type === 'CACTUS'
-      ? {
-          x: obs.x + 5,
-          y: obs.y + 6,
-          width: Math.max(6, obs.width - 10),
-          height: obs.height - 8
-        }
-      : {
-          x: obs.x + 6,
-          y: obs.y + 8,
-          width: obs.width - 12,
-          height: obs.height - 12
-        };
+      ? { x: obs.x + 5, y: obs.y + 6, width: Math.max(6, obs.width - 10), height: obs.height - 8 }
+      : { x: obs.x + 6, y: obs.y + 8, width: obs.width - 12, height: obs.height - 12 };
 
     return (
       dinoHitbox.x < obsHitbox.x + obsHitbox.width &&
@@ -525,8 +657,6 @@
   }
 
   submitBtn.addEventListener('click', submitLeaderboardName);
-
-  // 支援在輸入框按下 Enter 直接送出
   nameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -557,11 +687,52 @@
 
       dino.update();
 
+      // 視差層 1：遠景城市慢速移動 (0.15 倍速)
+      cityBuildings.forEach(b => {
+        b.x -= currentSpeed * 0.15;
+      });
+      if (cityBuildings.length > 0 && cityBuildings[0].x + cityBuildings[0].width < 0) {
+        const lastB = cityBuildings[cityBuildings.length - 1];
+        const w = 24 + Math.floor(Math.random() * 26);
+        const h = 25 + Math.floor(Math.random() * 55);
+        cityBuildings.shift();
+        cityBuildings.push({
+          x: lastB.x + lastB.width + Math.floor(Math.random() * 14) + 2,
+          width: w,
+          height: h,
+          hasAntenna: Math.random() > 0.65,
+          windows: Array.from({length: Math.floor(h / 12)}, (_, row) => ({
+            row,
+            lit: Math.random() > 0.4
+          }))
+        });
+      }
+
+      // 視差層 2：天空雲朵緩慢移動 (0.25 倍速)
+      clouds.forEach(cloud => {
+        cloud.x -= currentSpeed * 0.25;
+        if (cloud.x + 50 < 0) {
+          cloud.x = canvas.width + Math.random() * 120;
+          cloud.y = 40 + Math.random() * 60;
+        }
+      });
+
+      // 前景層：起伏地形與地面顆粒 (1.0 倍速)
+      terrainBumps.forEach(bump => {
+        bump.x -= currentSpeed;
+        if (bump.x + bump.width < 0) {
+          bump.x = canvas.width + Math.random() * 100;
+          bump.type = Math.random() > 0.4 ? 'HILL' : 'PIT';
+          bump.width = 24 + Math.floor(Math.random() * 16);
+        }
+      });
+
       groundDots.forEach(dot => {
         dot.x -= currentSpeed;
         if (dot.x < 0) dot.x = canvas.width;
       });
 
+      // 障礙物生成與更新
       if (frameCount % Math.max(35, Math.floor(110 - currentSpeed * 3)) === 0) {
         if (Math.random() < 0.65) spawnObstacle();
       }
@@ -585,38 +756,44 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const themeColor = isNight ? '#e8eaed' : '#535353';
+    const bgColor = isNight ? '#202124' : '#f7f7f7';
 
+    // 1. 夜間月亮與繁星
     if (isNight) {
       ctx.fillStyle = '#e8eaed';
       stars.forEach(s => ctx.fillRect(s.x, s.y, s.size, s.size));
       ctx.fillRect(680, 40, 20, 20);
-      ctx.fillStyle = '#202124';
+      ctx.fillStyle = bgColor;
       ctx.fillRect(676, 36, 12, 12);
     }
 
-    ctx.fillStyle = themeColor;
-    ctx.fillRect(0, groundOffset, canvas.width, 2);
-    groundDots.forEach(dot => {
-      ctx.fillRect(dot.x, dot.y, dot.size, 1);
-    });
+    // 2. 雙層視差背景（城市剪影 + 白雲）
+    drawCityBackground();
+    clouds.forEach(cloud => drawCloud(cloud));
 
+    // 3. 起伏地形與顆粒
+    drawTerrain(themeColor, bgColor);
+
+    // 4. 主角與障礙物
     dino.draw();
     obstacles.forEach(obs => {
       if (obs.type === 'CACTUS') drawCactus(obs);
       else drawBird(obs);
     });
 
+    // 5. 計分板
+    ctx.fillStyle = themeColor;
     ctx.font = '700 18px "Courier New", monospace';
     const displayScore = String(Math.floor(score)).padStart(5, '0');
     const displayHigh = String(Math.floor(highScore)).padStart(5, '0');
     ctx.fillText(`HI ${displayHigh}  ${displayScore}`, canvas.width - 190, 35);
 
+    // 6. 狀態文字與重來圖示
     if (gameState === 'START') {
       ctx.fillText('按下 [Space] 或點擊螢幕開始遊戲', canvas.width / 2 - 175, 110);
     } else if (gameState === 'GAMEOVER') {
-      ctx.fillText('G A M E   O V E R', canvas.width / 2 - 100, 100);
-      ctx.font = '14px "Courier New", monospace';
-      ctx.fillText('按下 [Space] 或點擊螢幕重新開始', canvas.width / 2 - 125, 130);
+      ctx.fillText('G A M E   O V E R', canvas.width / 2 - 100, 95);
+      drawRestartIcon(canvas.width / 2 - 17, 112, themeColor, bgColor);
     }
   }
 
