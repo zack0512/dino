@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>沙沙dino jump game 🎮 世界地標環遊版</title>
+  <title>沙沙dino jump game 終極版</title>
   <style>
     * {
       box-sizing: border-box;
@@ -33,7 +33,7 @@
     #game-container {
       position: relative;
       width: 100%;
-      max-width: 800px;
+      max-width: 820px;
       padding: 20px;
     }
     canvas {
@@ -66,30 +66,37 @@
       margin-bottom: 8px;
       border-bottom: 2px dashed currentColor;
       padding-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     #controls-info {
-      flex: 1;
-      min-width: 240px;
+      flex: 1.4;
+      min-width: 280px;
       line-height: 1.6;
     }
     #skin-selector {
       margin-top: 10px;
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
       gap: 6px;
     }
     .skin-btn {
-      padding: 5px 9px;
+      padding: 6px 8px;
       font-family: inherit;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: bold;
       border: 2px solid currentColor;
       border-radius: 5px;
       background: transparent;
       color: inherit;
       cursor: pointer;
-      opacity: 0.5;
+      opacity: 0.55;
       transition: all 0.2s;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .skin-btn.unlocked {
       opacity: 1;
@@ -103,7 +110,8 @@
       color: #202124;
     }
     #leaderboard-box {
-      min-width: 230px;
+      flex: 0.8;
+      min-width: 220px;
     }
     #leaderboard-list {
       list-style: none;
@@ -118,14 +126,14 @@
       top: 20px;
       left: 50%;
       transform: translateX(-50%) translateY(-100px);
-      background: #333;
+      background: #2b2c2f;
       color: #ffd700;
       border: 2px solid #ffd700;
-      padding: 10px 20px;
+      padding: 12px 22px;
       border-radius: 8px;
       font-weight: bold;
       font-size: 14px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.45);
       transition: transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
       z-index: 50;
       pointer-events: none;
@@ -192,18 +200,24 @@
   <div id="ui-panel">
     <div id="controls-info" class="panel-box">
       <h4>🎮 操作與特色玩法</h4>
-      <p>• [Space] / [↑] / 點擊：跳躍 / 重來</p>
-      <p>• [↓] 按住：蹲下避開高空飛鳥</p>
-      <p>• <b>極限擦身</b>：貼近障礙起跳觸發 COMBO 加分</p>
-      <p>• <b>流星許願</b>：流星雨之夜跳躍獲 +50 分</p>
-      <p>• <b>地標巡禮</b>：每突破 100 分出現一座世界地標</p>
+      <p>• [Space] / [↑] / 點擊：跳躍 / 重來 ｜ [↓] 按住：蹲下閃避</p>
+      <p>• <b>極限擦身</b>：貼近障礙起跳觸發 COMBO ｜ <b>流星許願</b>：流星雨跳躍 +50 分</p>
       
-      <h4 style="margin-top: 10px;">🦖 恐龍造型（達成條件自動解鎖）</h4>
+      <h4 style="margin-top: 10px;">
+        <span>🦖 恐龍造型衣櫃（達成條件解鎖）</span>
+        <span id="skin-progress-text" style="font-size: 12px;">1 / 10</span>
+      </h4>
       <div id="skin-selector">
         <button class="skin-btn unlocked active" data-skin="DEFAULT">🦖 經典恐龍</button>
-        <button class="skin-btn" data-skin="COOL" title="累計擦身 10 次解鎖">🔒 墨鏡酷龍 (0/10擦身)</button>
-        <button class="skin-btn" data-skin="GENTLEMAN" title="單場突破 500 分解鎖">🔒 紳士恐龍 (單場500分)</button>
-        <button class="skin-btn" data-skin="CYBER" title="累積總分達 3000 分解鎖">🔒 機械暴龍 (0/3000總分)</button>
+        <button class="skin-btn" data-skin="DUCK_PRO" title="累計蹲下閃避翼龍 5 次解鎖">🔒 潛行忍者龍</button>
+        <button class="skin-btn" data-skin="COOL" title="累計極限擦身 10 次解鎖">🔒 墨鏡酷龍</button>
+        <button class="skin-btn" data-skin="WIZARD" title="在流星雨之夜許願跳躍 3 次解鎖">🔒 星辰法師龍</button>
+        <button class="skin-btn" data-skin="RAIN_FROG" title="在雷雨天氣中累計跳躍 30 次解鎖">🔒 雨衣青蛙龍</button>
+        <button class="skin-btn" data-skin="GENTLEMAN" title="單場突破 500 分解鎖">🔒 紳士恐龍</button>
+        <button class="skin-btn" data-skin="COMBO_KING" title="單場達成 3 連擊擦身 (COMBO x3) 解鎖">🔒 烈焰疾風龍</button>
+        <button class="skin-btn" data-skin="ASTRONAUT" title="單場突破 1000 分（挺過火山隕石）解鎖">🔒 太空人恐龍</button>
+        <button class="skin-btn" data-skin="CYBER" title="累積總分達 3000 分解鎖">🔒 機械暴龍</button>
+        <button class="skin-btn" data-skin="GOLDEN" title="累積遊玩達 15 場或總分 8000 分解鎖">🔒 黃金傳說龍</button>
       </div>
     </div>
 
@@ -250,6 +264,7 @@
   const submitBtn = document.getElementById('submit-name-btn');
   const leaderboardList = document.getElementById('leaderboard-list');
   const toastEl = document.getElementById('achievement-toast');
+  const progressTextEl = document.getElementById('skin-progress-text');
 
   let gameState = 'START';
   let score = 0;
@@ -261,14 +276,75 @@
   let frameCount = 0;
 
   // ==========================================
-  // 成就與造型存檔系統 (LocalStorage)
+  // 1. 擴充版成就與 10 款造型存檔系統 (LocalStorage)
   // ==========================================
-  let stats = JSON.parse(localStorage.getItem('dino_stats_v1')) || {
+  const defaultStats = {
     totalScore: 0,
     totalNearMiss: 0,
     maxSingleScore: 0,
+    maxCombo: 0,
+    totalWishes: 0,
+    totalRainJumps: 0,
+    totalBirdDucks: 0,
+    gamesPlayed: 0,
     unlockedSkins: ['DEFAULT'],
     selectedSkin: 'DEFAULT'
+  };
+
+  let savedRaw = JSON.parse(localStorage.getItem('dino_stats_v1')) || {};
+  let stats = { ...defaultStats, ...savedRaw };
+
+  const SKIN_CONFIG = {
+    DEFAULT: {
+      name: '🦖 經典恐龍',
+      condText: () => '預設可用',
+      check: () => true
+    },
+    DUCK_PRO: {
+      name: '🥷 潛行忍者龍',
+      condText: () => `蹲閃翼龍 (${Math.min(5, stats.totalBirdDucks)}/5)`,
+      check: () => stats.totalBirdDucks >= 5
+    },
+    COOL: {
+      name: '🕶️ 墨鏡酷龍',
+      condText: () => `累計擦身 (${Math.min(10, stats.totalNearMiss)}/10)`,
+      check: () => stats.totalNearMiss >= 10
+    },
+    WIZARD: {
+      name: '🧙 星辰法師龍',
+      condText: () => `流星許願 (${Math.min(3, stats.totalWishes)}/3)`,
+      check: () => stats.totalWishes >= 3
+    },
+    RAIN_FROG: {
+      name: '🐸 雨衣青蛙龍',
+      condText: () => `雷雨跳躍 (${Math.min(30, stats.totalRainJumps)}/30)`,
+      check: () => stats.totalRainJumps >= 30
+    },
+    GENTLEMAN: {
+      name: '🎩 紳士恐龍',
+      condText: () => `單場500分 (${Math.min(500, stats.maxSingleScore)}/500)`,
+      check: () => stats.maxSingleScore >= 500
+    },
+    COMBO_KING: {
+      name: '🔥 烈焰疾風龍',
+      condText: () => `擦身3連擊 (${Math.min(3, stats.maxCombo)}/3)`,
+      check: () => stats.maxCombo >= 3
+    },
+    ASTRONAUT: {
+      name: '🧑‍🚀 太空人恐龍',
+      condText: () => `單場1000分 (${Math.min(1000, stats.maxSingleScore)}/1000)`,
+      check: () => stats.maxSingleScore >= 1000
+    },
+    CYBER: {
+      name: '🤖 機械暴龍',
+      condText: () => `累積3000分 (${Math.min(3000, Math.floor(stats.totalScore))}/3000)`,
+      check: () => stats.totalScore >= 3000
+    },
+    GOLDEN: {
+      name: '👑 黃金傳說龍',
+      condText: () => `15場或8000分 (${stats.gamesPlayed}/15場)`,
+      check: () => stats.gamesPlayed >= 15 || stats.totalScore >= 8000
+    }
   };
 
   function saveStats() {
@@ -276,53 +352,65 @@
     updateSkinButtonsUI();
   }
 
+  let toastQueue = [];
+  let isToastShowing = false;
   function showToast(msg) {
+    toastQueue.push(msg);
+    processToastQueue();
+  }
+
+  function processToastQueue() {
+    if (isToastShowing || toastQueue.length === 0) return;
+    isToastShowing = true;
+    const msg = toastQueue.shift();
     toastEl.textContent = msg;
     toastEl.classList.add('show');
     playAchievementSound();
     setTimeout(() => {
       toastEl.classList.remove('show');
-    }, 3200);
+      setTimeout(() => {
+        isToastShowing = false;
+        processToastQueue();
+      }, 450);
+    }, 2800);
   }
 
-  function checkAchievements(currentRunScore) {
+  function checkAchievements(currentRunScore = 0) {
     let newlyUnlocked = false;
     if (currentRunScore > stats.maxSingleScore) {
       stats.maxSingleScore = currentRunScore;
     }
 
-    if (stats.totalNearMiss >= 10 && !stats.unlockedSkins.includes('COOL')) {
-      stats.unlockedSkins.push('COOL');
-      showToast('🏆 成就解鎖：【墨鏡酷龍】已開放使用！');
-      newlyUnlocked = true;
-    }
-    if (stats.maxSingleScore >= 500 && !stats.unlockedSkins.includes('GENTLEMAN')) {
-      stats.unlockedSkins.push('GENTLEMAN');
-      showToast('🏆 成就解鎖：【紳士恐龍】已開放使用！');
-      newlyUnlocked = true;
-    }
-    if (stats.totalScore >= 3000 && !stats.unlockedSkins.includes('CYBER')) {
-      stats.unlockedSkins.push('CYBER');
-      showToast('🏆 成就解鎖：【機械暴龍】已開放使用！');
-      newlyUnlocked = true;
-    }
+    Object.keys(SKIN_CONFIG).forEach(skinKey => {
+      if (!stats.unlockedSkins.includes(skinKey) && SKIN_CONFIG[skinKey].check()) {
+        stats.unlockedSkins.push(skinKey);
+        showToast(`🏆 造型解鎖：【${SKIN_CONFIG[skinKey].name}】！`);
+        newlyUnlocked = true;
+      }
+    });
+
     if (newlyUnlocked) saveStats();
+    else updateSkinButtonsUI();
   }
 
   function updateSkinButtonsUI() {
     const buttons = document.querySelectorAll('.skin-btn');
+    const totalCount = Object.keys(SKIN_CONFIG).length;
+    progressTextEl.textContent = `${stats.unlockedSkins.length} / ${totalCount}`;
+
     buttons.forEach(btn => {
       const skin = btn.dataset.skin;
+      const cfg = SKIN_CONFIG[skin];
+      if (!cfg) return;
+
       const isUnlocked = stats.unlockedSkins.includes(skin);
       btn.classList.toggle('unlocked', isUnlocked);
       btn.classList.toggle('active', stats.selectedSkin === skin);
 
-      if (skin === 'COOL') {
-        btn.textContent = isUnlocked ? '🕶️ 墨鏡酷龍' : `🔒 墨鏡酷龍 (${Math.min(10, stats.totalNearMiss)}/10擦身)`;
-      } else if (skin === 'GENTLEMAN') {
-        btn.textContent = isUnlocked ? '🎩 紳士恐龍' : `🔒 紳士恐龍 (單場500分)`;
-      } else if (skin === 'CYBER') {
-        btn.textContent = isUnlocked ? '🤖 機械暴龍' : `🔒 機械暴龍 (${Math.min(3000, Math.floor(stats.totalScore))}/3000總分)`;
+      if (isUnlocked) {
+        btn.textContent = cfg.name;
+      } else {
+        btn.textContent = `🔒 ${cfg.condText()}`;
       }
     });
   }
@@ -335,11 +423,13 @@
         stats.selectedSkin = skin;
         saveStats();
       } else {
-        showToast('🔒 尚未達成該造型的解鎖條件喔！');
+        showToast(`🔒 解鎖條件：${btn.title}`);
       }
     });
   });
 
+  // 初始化時檢查一次舊存檔是否已滿足新條件
+  checkAchievements(stats.maxSingleScore);
   updateSkinButtonsUI();
 
   function isModalOpen() {
@@ -411,20 +501,19 @@
   const groundOffset = 210;
 
   const LANDMARK_TYPES = [
-    'TAIPEI_101',     // 台北 101
-    'EIFFEL',         // 巴黎艾菲爾鐵塔
-    'TOKYO_TOWER',    // 東京鐵塔
-    'EMPIRE_STATE',   // 紐約帝國大廈
-    'BIG_BEN',        // 倫敦大笨鐘
-    'SYDNEY_OPERA',   // 雪梨歌劇院
-    'PYRAMIDS'        // 埃及金字塔
+    'TAIPEI_101',
+    'EIFFEL',
+    'TOKYO_TOWER',
+    'EMPIRE_STATE',
+    'BIG_BEN',
+    'SYDNEY_OPERA',
+    'PYRAMIDS'
   ];
   let landmarkQueue = [...LANDMARK_TYPES];
-  let nextLandmarkScore = 100; // 下一個觸發地標的分數門檻
-  let pendingLandmark = false; // 是否有排隊等待生成的地標
+  let nextLandmarkScore = 100;
+  let pendingLandmark = false;
 
   function createCityElement(startX, forceNormal = false) {
-    // 只有當分數跨越 100 的倍數（pendingLandmark 為 true）且非強制普通建築時，才生成地標
     if (!forceNormal && pendingLandmark) {
       pendingLandmark = false;
       if (landmarkQueue.length === 0) {
@@ -449,7 +538,6 @@
       };
     }
 
-    // 普通現代大樓
     const w = 24 + Math.floor(Math.random() * 24);
     const h = 24 + Math.floor(Math.random() * 44);
     return {
@@ -470,7 +558,6 @@
     cityBuildings = [];
     let nextCityX = 20;
     while (nextCityX < canvas.width + 250) {
-      // 開場畫面只放普通大樓，等跑滿 100 分才開始出現地標
       const item = createCityElement(nextCityX, true);
       cityBuildings.push(item);
       nextCityX += item.width + 10 + Math.floor(Math.random() * 16);
@@ -501,7 +588,6 @@
     size: Math.random() > 0.5 ? 2 : 3
   }));
 
-  // 繪製世界知名都市地標與背景建築
   function drawCityBackground() {
     const cityColor = isNight ? 'rgba(232, 234, 237, 0.16)' : 'rgba(83, 83, 83, 0.17)';
     const accentColor = isNight ? 'rgba(255, 224, 102, 0.45)' : 'rgba(83, 83, 83, 0.28)';
@@ -698,7 +784,7 @@
   }
 
   // ==========================================
-  // 恐龍物件（支援 4 種解鎖造型 + 驚訝死法）
+  // 2. 恐龍物件（完整繪製 10 款造型外觀 + 驚訝死法）
   // ==========================================
   let nearMissCombo = 0;
 
@@ -717,12 +803,42 @@
     draw() {
       const skin = stats.selectedSkin;
       let color = isNight ? '#e8eaed' : '#535353';
+
+      // 各造型主體配色
       if (skin === 'CYBER') {
         color = isNight ? '#00e5ff' : '#0277bd';
+      } else if (skin === 'GOLDEN') {
+        color = isNight ? '#ffd54f' : '#d49b00';
+      } else if (skin === 'RAIN_FROG') {
+        color = isNight ? '#69f0ae' : '#2e7d32';
+      } else if (skin === 'DUCK_PRO') {
+        color = isNight ? '#b0bec5' : '#263238';
+      } else if (skin === 'WIZARD') {
+        color = isNight ? '#b388ff' : '#4a148c';
+      } else if (skin === 'COMBO_KING') {
+        color = isNight ? '#ff6e40' : '#d84315';
+      } else if (skin === 'ASTRONAUT') {
+        color = isNight ? '#ffffff' : '#607d8b';
       }
+
       const bgColor = weather === 'VOLCANO' ? '#2b1818' : (isNight ? '#202124' : '#f7f7f7');
       const isDead = gameState === 'GAMEOVER';
       ctx.fillStyle = color;
+
+      // 烈焰疾風龍：身後動態火焰尾跡
+      if (skin === 'COMBO_KING' && gameState === 'PLAYING') {
+        ctx.fillStyle = frameCount % 4 < 2 ? '#ff9100' : '#ff1744';
+        ctx.fillRect(this.x - 10, this.y + 20, 10, 6);
+        ctx.fillRect(this.x - 16, this.y + 22, 6, 3);
+        ctx.fillStyle = color;
+      }
+
+      // 太空人恐龍：透明玻璃頭盔外框
+      if (skin === 'ASTRONAUT' && (!this.isDucking || !this.isGrounded || isDead)) {
+        ctx.fillStyle = isNight ? 'rgba(128, 216, 255, 0.35)' : 'rgba(3, 169, 244, 0.25)';
+        ctx.fillRect(this.x + 20, this.y - 3, 26, 23);
+        ctx.fillStyle = color;
+      }
 
       if (this.isDucking && this.isGrounded && !isDead) {
         const dy = 184;
@@ -734,6 +850,11 @@
         if (skin === 'COOL') {
           ctx.fillStyle = '#111';
           ctx.fillRect(this.x + 48, dy + 5, 8, 4);
+        } else if (skin === 'DUCK_PRO') {
+          // 忍者紅頭帶
+          ctx.fillStyle = '#ff1744';
+          ctx.fillRect(this.x + 36, dy + 5, 20, 3);
+          ctx.fillRect(this.x + 30, dy + 6, 6, 2);
         }
 
         ctx.fillStyle = color;
@@ -746,6 +867,7 @@
         const dx = this.x;
         const dy = this.y;
 
+        // 頭部與嘴巴
         ctx.fillRect(dx + 22, dy, 22, 18);
         if (isDead) {
           ctx.fillRect(dx + 26, dy + 14, 16, 3);
@@ -753,6 +875,7 @@
           ctx.fillRect(dx + 26, dy + 12, 18, 4);
         }
 
+        // 眼睛與臉部配件
         if (isDead) {
           ctx.fillStyle = bgColor;
           ctx.fillRect(dx + 25, dy + 3, 6, 6);
@@ -766,30 +889,77 @@
         } else if (skin === 'CYBER') {
           ctx.fillStyle = '#ff1744';
           ctx.fillRect(dx + 26, dy + 4, 5, 3);
+        } else if (skin === 'DUCK_PRO') {
+          // 忍者紅色頭帶與飄帶
+          ctx.fillStyle = '#ff1744';
+          ctx.fillRect(dx + 22, dy + 3, 22, 3);
+          ctx.fillRect(dx + 16, dy + 4, 6, 2);
+          ctx.fillRect(dx + 14, dy + 6, 4, 2);
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(dx + 27, dy + 4, 3, 2);
         } else {
           ctx.fillStyle = bgColor;
           ctx.fillRect(dx + 26, dy + 4, 3, 3);
         }
 
+        // 頭頂專屬帽子配件
         if (skin === 'GENTLEMAN') {
           ctx.fillStyle = isNight ? '#ffd54f' : '#212121';
           ctx.fillRect(dx + 22, dy - 3, 20, 3);
           ctx.fillRect(dx + 26, dy - 12, 12, 9);
+        } else if (skin === 'WIZARD') {
+          // 星辰法師尖帽
+          ctx.fillStyle = '#7c4dff';
+          ctx.fillRect(dx + 20, dy - 3, 24, 3);
+          ctx.fillRect(dx + 24, dy - 9, 16, 6);
+          ctx.fillRect(dx + 27, dy - 15, 10, 6);
+          ctx.fillRect(dx + 30, dy - 20, 4, 5);
+          ctx.fillStyle = '#ffd740';
+          ctx.fillRect(dx + 29, dy - 8, 3, 3); // 星星徽章
+        } else if (skin === 'RAIN_FROG') {
+          // 青蛙大眼睛雨衣帽
+          ctx.fillStyle = '#4caf50';
+          ctx.fillRect(dx + 23, dy - 5, 7, 5);
+          ctx.fillRect(dx + 34, dy - 5, 7, 5);
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(dx + 25, dy - 4, 3, 3);
+          ctx.fillRect(dx + 36, dy - 4, 3, 3);
+          ctx.fillStyle = '#111';
+          ctx.fillRect(dx + 26, dy - 3, 2, 2);
+          ctx.fillRect(dx + 37, dy - 3, 2, 2);
+        } else if (skin === 'GOLDEN') {
+          // 黃金皇冠
+          ctx.fillStyle = '#ffab00';
+          ctx.fillRect(dx + 24, dy - 4, 16, 4);
+          ctx.fillRect(dx + 24, dy - 8, 3, 4);
+          ctx.fillRect(dx + 30, dy - 9, 4, 5);
+          ctx.fillRect(dx + 37, dy - 8, 3, 4);
         }
 
+        // 軀幹與尾巴
         ctx.fillStyle = color;
         ctx.fillRect(dx + 10, dy + 14, 20, 20);
         ctx.fillRect(dx + 4, dy + 18, 6, 12);
         ctx.fillRect(dx, dy + 22, 4, 6);
         ctx.fillRect(dx + 28, dy + 22, 4, 4);
 
+        // 軀幹特殊裝備細節
         if (skin === 'CYBER') {
           ctx.fillStyle = bgColor;
           ctx.fillRect(dx + 14, dy + 18, 10, 2);
           ctx.fillRect(dx + 14, dy + 23, 10, 2);
-          ctx.fillStyle = color;
+        } else if (skin === 'ASTRONAUT') {
+          // 太空氧氣背包
+          ctx.fillStyle = '#cfd8dc';
+          ctx.fillRect(dx + 4, dy + 14, 6, 14);
+        } else if (skin === 'GOLDEN') {
+          // 黃金閃亮光點
+          ctx.fillStyle = '#fff9c4';
+          ctx.fillRect(dx + 16, dy + 19, 3, 3);
         }
 
+        // 腳部
+        ctx.fillStyle = color;
         if (!this.isGrounded || isDead) {
           ctx.fillRect(dx + 12, dy + 34, 4, 10);
           ctx.fillRect(dx + 22, dy + 34, 4, 10);
@@ -812,11 +982,22 @@
         this.isGrounded = false;
         playJumpSound();
 
+        // 統計雷雨天氣跳躍次數
+        if (weather === 'RAIN') {
+          stats.totalRainJumps++;
+          checkAchievements(Math.floor(score));
+          saveStats();
+        }
+
+        // 流星雨之夜許願跳躍
         if (weather === 'METEOR_SHOWER' && shootingStars.length > 0) {
           score += 50;
           stats.totalScore += 50;
+          stats.totalWishes++;
           playScoreSound();
           spawnFloatingText('🌠 流星許願 +50!', this.x, this.y - 20, '#80d8ff');
+          checkAchievements(Math.floor(score));
+          saveStats();
         }
       }
     },
@@ -847,7 +1028,8 @@
         height: 44,
         type: 'CACTUS',
         count: count,
-        nearMissChecked: false
+        nearMissChecked: false,
+        duckChecked: false
       });
     } else {
       const birdY = Math.random() < 0.5 ? 125 : 160;
@@ -858,7 +1040,8 @@
         height: 26,
         type: 'BIRD',
         wingFrame: 0,
-        nearMissChecked: false
+        nearMissChecked: false,
+        duckChecked: false
       });
     }
   }
@@ -1022,14 +1205,28 @@
   }
 
   function checkNearMiss(dinoObj, obs) {
-    if (obs.nearMissChecked) return;
     const dinoHitbox = getDinoHitbox(dinoObj);
+
+    // 蹲下閃避翼龍統計
+    if (!obs.duckChecked && obs.type === 'BIRD' && obs.x + obs.width < dinoHitbox.x) {
+      obs.duckChecked = true;
+      if (dinoObj.isDucking && dinoObj.isGrounded) {
+        stats.totalBirdDucks++;
+        checkAchievements(Math.floor(score));
+        saveStats();
+      }
+    }
+
+    if (obs.nearMissChecked) return;
     if (obs.x + obs.width < dinoHitbox.x) {
       obs.nearMissChecked = true;
       const verticalGap = Math.abs((dinoHitbox.y + dinoHitbox.height) - obs.y);
       if (verticalGap < 26) {
         nearMissCombo++;
         stats.totalNearMiss++;
+        if (nearMissCombo > stats.maxCombo) {
+          stats.maxCombo = nearMissCombo;
+        }
         const bonus = 20 * Math.min(nearMissCombo, 5);
         score += bonus;
         stats.totalScore += bonus;
@@ -1048,6 +1245,7 @@
     gameState = 'GAMEOVER';
     playHitSound();
 
+    stats.gamesPlayed++;
     const currentScoreInt = Math.floor(score);
     checkAchievements(currentScoreInt);
     saveStats();
@@ -1098,7 +1296,6 @@
       stats.totalScore += 0.15;
       const updatedScoreInt = Math.floor(score);
 
-      // 每突破 100 分里程碑，排入一座世界地標
       if (updatedScoreInt >= nextLandmarkScore) {
         pendingLandmark = true;
         nextLandmarkScore += 100;
@@ -1112,7 +1309,6 @@
       updateWeatherState(updatedScoreInt);
       dino.update();
 
-      // 視差層 1：世界都市地標與建築慢速移動
       cityBuildings.forEach(b => {
         b.x -= currentSpeed * 0.15;
       });
@@ -1123,7 +1319,6 @@
         cityBuildings.push(nextItem);
       }
 
-      // 視差層 2：天空雲朵
       clouds.forEach(cloud => {
         cloud.x -= currentSpeed * 0.25;
         if (cloud.x + 50 < 0) {
@@ -1132,7 +1327,6 @@
         }
       });
 
-      // 雷雨天特效更新
       if (weather === 'RAIN') {
         rainDrops.forEach(r => {
           r.x -= 3;
@@ -1150,7 +1344,6 @@
         lightningAlpha = Math.max(0, lightningAlpha - 0.05);
       }
 
-      // 流星雨之夜更新
       if (weather === 'METEOR_SHOWER' && Math.random() < 0.015) {
         shootingStars.push({
           x: 300 + Math.random() * 500,
@@ -1168,7 +1361,6 @@
         if (s.life <= 0) shootingStars.splice(i, 1);
       }
 
-      // 火山隕石雨更新
       if (weather === 'VOLCANO' && frameCount % 95 === 0 && Math.random() < 0.7) {
         const targetX = 160 + Math.random() * 450;
         volcanoMeteors.push({
@@ -1200,7 +1392,6 @@
         }
       }
 
-      // 前景起伏地形與地面顆粒
       terrainBumps.forEach(bump => {
         bump.x -= currentSpeed;
         if (bump.x + bump.width < 0) {
@@ -1215,7 +1406,6 @@
         if (dot.x < 0) dot.x = canvas.width;
       });
 
-      // 障礙物生成與更新
       if (frameCount % Math.max(35, Math.floor(110 - currentSpeed * 3)) === 0) {
         if (Math.random() < 0.65) spawnObstacle();
       }
