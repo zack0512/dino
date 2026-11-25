@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>沙沙dino jump game 終極版</title>
+  <title>沙沙dino jump game 🎮 雲端存檔版</title>
   <style>
     * {
       box-sizing: border-box;
@@ -35,6 +35,53 @@
       width: 100%;
       max-width: 820px;
       padding: 20px;
+    }
+    /* 頂部 Google 帳號狀態列 */
+    #auth-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      padding: 8px 14px;
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    body.night #auth-bar, body.meteor-mode #auth-bar {
+      background: rgba(255, 255, 255, 0.08);
+    }
+    #user-profile {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    #user-avatar {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      display: none;
+      border: 1.5px solid currentColor;
+    }
+    .auth-btn {
+      padding: 6px 12px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: bold;
+      cursor: pointer;
+      border: 2px solid currentColor;
+      border-radius: 6px;
+      background: transparent;
+      color: inherit;
+      transition: all 0.2s;
+    }
+    .auth-btn:hover {
+      background: #535353;
+      color: #fff;
+    }
+    body.night .auth-btn:hover, body.meteor-mode .auth-btn:hover {
+      background: #e8eaed;
+      color: #202124;
     }
     canvas {
       background-color: transparent;
@@ -195,6 +242,18 @@
 <div id="achievement-toast">🏆 成就解鎖！</div>
 
 <div id="game-container">
+  <!-- Google 登入與雲端存檔狀態列 -->
+  <div id="auth-bar">
+    <div id="user-profile">
+      <img id="user-avatar" src="" alt="頭像">
+      <span id="user-status-text">☁️ 訪客模式（進度僅存於本機）</span>
+    </div>
+    <div>
+      <button id="google-login-btn" class="auth-btn">🔑 Google 登入同步存檔</button>
+      <button id="google-logout-btn" class="auth-btn" style="display: none;">登出</button>
+    </div>
+  </div>
+
   <canvas id="gameCanvas" width="800" height="250"></canvas>
   
   <div id="ui-panel">
@@ -240,7 +299,8 @@
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+  import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBZ9s5Ku8aEzaVEmk_7ztbIiHXI6qmz5H0",
@@ -255,6 +315,10 @@
 
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
+  const auth = getAuth(app);
+  const googleProvider = new GoogleAuthProvider();
+  googleProvider.setCustomParameters({ prompt: 'select_account' });
+
   const leaderboardRef = ref(db, 'leaderboard');
 
   const canvas = document.getElementById('gameCanvas');
@@ -266,6 +330,13 @@
   const toastEl = document.getElementById('achievement-toast');
   const progressTextEl = document.getElementById('skin-progress-text');
 
+  // Google 登入 UI 元素
+  const loginBtn = document.getElementById('google-login-btn');
+  const logoutBtn = document.getElementById('google-logout-btn');
+  const userAvatar = document.getElementById('user-avatar');
+  const userStatusText = document.getElementById('user-status-text');
+
+  let currentUser = null; // 當前登入的 Google 使用者
   let gameState = 'START';
   let score = 0;
   let highScore = 0;
@@ -276,7 +347,7 @@
   let frameCount = 0;
 
   // ==========================================
-  // 1. 擴充版成就與 10 款造型存檔系統 (LocalStorage)
+  // 1. 成就與 10 款造型存檔系統 (本機 + Firebase 雲端雙向同步)
   // ==========================================
   const defaultStats = {
     totalScore: 0,
@@ -347,10 +418,105 @@
     }
   };
 
+  // 將進度同時寫入 LocalStorage 與 Firebase 雲端（若有登入）
   function saveStats() {
     localStorage.setItem('dino_stats_v1', JSON.stringify(stats));
     updateSkinButtonsUI();
+
+    if (currentUser) {
+      const userStatsRef = ref(db, `users/${currentUser.uid}/stats`);
+      set(userStatsRef, {
+        ...stats,
+        totalScore: Math.floor(stats.totalScore),
+        displayName: currentUser.displayName || '玩家',
+        updatedAt: Date.now()
+      }).catch(err => console.error('雲端存檔失敗:', err));
+    }
   }
+
+  // 登入時讀取雲端存檔並與本機進度合併（保留較高紀錄與所有已解鎖造型）
+  async function syncCloudStats(user) {
+    try {
+      const userStatsRef = ref(db, `users/${user.uid}/stats`);
+      const snapshot = await get(userStatsRef);
+
+      if (snapshot.exists()) {
+        const cloudData = snapshot.val();
+        const mergedSkins = Array.from(new Set([
+          ...(stats.unlockedSkins || ['DEFAULT']),
+          ...(cloudData.unlockedSkins || ['DEFAULT'])
+        ]));
+
+        stats = {
+          totalScore: Math.max(stats.totalScore, cloudData.totalScore || 0),
+          totalNearMiss: Math.max(stats.totalNearMiss, cloudData.totalNearMiss || 0),
+          maxSingleScore: Math.max(stats.maxSingleScore, cloudData.maxSingleScore || 0),
+          maxCombo: Math.max(stats.maxCombo, cloudData.maxCombo || 0),
+          totalWishes: Math.max(stats.totalWishes, cloudData.totalWishes || 0),
+          totalRainJumps: Math.max(stats.totalRainJumps, cloudData.totalRainJumps || 0),
+          totalBirdDucks: Math.max(stats.totalBirdDucks, cloudData.totalBirdDucks || 0),
+          gamesPlayed: Math.max(stats.gamesPlayed, cloudData.gamesPlayed || 0),
+          unlockedSkins: mergedSkins,
+          selectedSkin: cloudData.selectedSkin && mergedSkins.includes(cloudData.selectedSkin)
+            ? cloudData.selectedSkin
+            : stats.selectedSkin
+        };
+      }
+      // 合併完畢後檢查成就並回寫雲端
+      checkAchievements(stats.maxSingleScore);
+      saveStats();
+      showToast(`☁️ 已同步 ${user.displayName} 的雲端造型與進度！`);
+    } catch (error) {
+      console.error('讀取雲端存檔錯誤:', error);
+      showToast('⚠️ 雲端讀取失敗，請確認 Firebase 規則設定');
+    }
+  }
+
+  // Google 登入與登出事件監聽
+  loginBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error('Google 登入失敗:', error);
+      if (error.code === 'auth/unauthorized-domain') {
+        showToast('❌ 網域未授權！請至 Firebase 後台新增網域');
+      } else if (error.code === 'auth/operation-not-allowed') {
+        showToast('❌ 請先至 Firebase 後台啟用 Google 登入');
+      } else {
+        showToast('❌ 登入取消或發生錯誤');
+      }
+    }
+  });
+
+  logoutBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    await signOut(auth);
+    showToast('👋 已登出 Google 帳號');
+  });
+
+  onAuthStateChanged(auth, (user) => {
+    currentUser = user;
+    if (user) {
+      loginBtn.style.display = 'none';
+      logoutBtn.style.display = 'inline-block';
+      userStatusText.textContent = `☁️ 已連線：${user.displayName}`;
+      if (user.photoURL) {
+        userAvatar.src = user.photoURL;
+        userAvatar.style.display = 'inline-block';
+      }
+      // 順便更新本地預設排行榜名稱
+      if (!localStorage.getItem('pixel_runner_username') && user.displayName) {
+        localStorage.setItem('pixel_runner_username', user.displayName.slice(0, 10));
+      }
+      syncCloudStats(user);
+    } else {
+      loginBtn.style.display = 'inline-block';
+      logoutBtn.style.display = 'none';
+      userAvatar.style.display = 'none';
+      userStatusText.textContent = '☁️ 訪客模式（進度僅存於本機）';
+    }
+  });
 
   let toastQueue = [];
   let isToastShowing = false;
@@ -428,7 +594,6 @@
     });
   });
 
-  // 初始化時檢查一次舊存檔是否已滿足新條件
   checkAchievements(stats.maxSingleScore);
   updateSkinButtonsUI();
 
@@ -784,7 +949,7 @@
   }
 
   // ==========================================
-  // 2. 恐龍物件（完整繪製 10 款造型外觀 + 驚訝死法）
+  // 2. 恐龍物件（10 款造型外觀 + 驚訝死法）
   // ==========================================
   let nearMissCombo = 0;
 
@@ -804,7 +969,6 @@
       const skin = stats.selectedSkin;
       let color = isNight ? '#e8eaed' : '#535353';
 
-      // 各造型主體配色
       if (skin === 'CYBER') {
         color = isNight ? '#00e5ff' : '#0277bd';
       } else if (skin === 'GOLDEN') {
@@ -825,7 +989,6 @@
       const isDead = gameState === 'GAMEOVER';
       ctx.fillStyle = color;
 
-      // 烈焰疾風龍：身後動態火焰尾跡
       if (skin === 'COMBO_KING' && gameState === 'PLAYING') {
         ctx.fillStyle = frameCount % 4 < 2 ? '#ff9100' : '#ff1744';
         ctx.fillRect(this.x - 10, this.y + 20, 10, 6);
@@ -833,7 +996,6 @@
         ctx.fillStyle = color;
       }
 
-      // 太空人恐龍：透明玻璃頭盔外框
       if (skin === 'ASTRONAUT' && (!this.isDucking || !this.isGrounded || isDead)) {
         ctx.fillStyle = isNight ? 'rgba(128, 216, 255, 0.35)' : 'rgba(3, 169, 244, 0.25)';
         ctx.fillRect(this.x + 20, this.y - 3, 26, 23);
@@ -851,7 +1013,6 @@
           ctx.fillStyle = '#111';
           ctx.fillRect(this.x + 48, dy + 5, 8, 4);
         } else if (skin === 'DUCK_PRO') {
-          // 忍者紅頭帶
           ctx.fillStyle = '#ff1744';
           ctx.fillRect(this.x + 36, dy + 5, 20, 3);
           ctx.fillRect(this.x + 30, dy + 6, 6, 2);
@@ -867,7 +1028,6 @@
         const dx = this.x;
         const dy = this.y;
 
-        // 頭部與嘴巴
         ctx.fillRect(dx + 22, dy, 22, 18);
         if (isDead) {
           ctx.fillRect(dx + 26, dy + 14, 16, 3);
@@ -875,7 +1035,6 @@
           ctx.fillRect(dx + 26, dy + 12, 18, 4);
         }
 
-        // 眼睛與臉部配件
         if (isDead) {
           ctx.fillStyle = bgColor;
           ctx.fillRect(dx + 25, dy + 3, 6, 6);
@@ -890,7 +1049,6 @@
           ctx.fillStyle = '#ff1744';
           ctx.fillRect(dx + 26, dy + 4, 5, 3);
         } else if (skin === 'DUCK_PRO') {
-          // 忍者紅色頭帶與飄帶
           ctx.fillStyle = '#ff1744';
           ctx.fillRect(dx + 22, dy + 3, 22, 3);
           ctx.fillRect(dx + 16, dy + 4, 6, 2);
@@ -902,22 +1060,19 @@
           ctx.fillRect(dx + 26, dy + 4, 3, 3);
         }
 
-        // 頭頂專屬帽子配件
         if (skin === 'GENTLEMAN') {
           ctx.fillStyle = isNight ? '#ffd54f' : '#212121';
           ctx.fillRect(dx + 22, dy - 3, 20, 3);
           ctx.fillRect(dx + 26, dy - 12, 12, 9);
         } else if (skin === 'WIZARD') {
-          // 星辰法師尖帽
           ctx.fillStyle = '#7c4dff';
           ctx.fillRect(dx + 20, dy - 3, 24, 3);
           ctx.fillRect(dx + 24, dy - 9, 16, 6);
           ctx.fillRect(dx + 27, dy - 15, 10, 6);
           ctx.fillRect(dx + 30, dy - 20, 4, 5);
           ctx.fillStyle = '#ffd740';
-          ctx.fillRect(dx + 29, dy - 8, 3, 3); // 星星徽章
+          ctx.fillRect(dx + 29, dy - 8, 3, 3);
         } else if (skin === 'RAIN_FROG') {
-          // 青蛙大眼睛雨衣帽
           ctx.fillStyle = '#4caf50';
           ctx.fillRect(dx + 23, dy - 5, 7, 5);
           ctx.fillRect(dx + 34, dy - 5, 7, 5);
@@ -928,7 +1083,6 @@
           ctx.fillRect(dx + 26, dy - 3, 2, 2);
           ctx.fillRect(dx + 37, dy - 3, 2, 2);
         } else if (skin === 'GOLDEN') {
-          // 黃金皇冠
           ctx.fillStyle = '#ffab00';
           ctx.fillRect(dx + 24, dy - 4, 16, 4);
           ctx.fillRect(dx + 24, dy - 8, 3, 4);
@@ -936,29 +1090,24 @@
           ctx.fillRect(dx + 37, dy - 8, 3, 4);
         }
 
-        // 軀幹與尾巴
         ctx.fillStyle = color;
         ctx.fillRect(dx + 10, dy + 14, 20, 20);
         ctx.fillRect(dx + 4, dy + 18, 6, 12);
         ctx.fillRect(dx, dy + 22, 4, 6);
         ctx.fillRect(dx + 28, dy + 22, 4, 4);
 
-        // 軀幹特殊裝備細節
         if (skin === 'CYBER') {
           ctx.fillStyle = bgColor;
           ctx.fillRect(dx + 14, dy + 18, 10, 2);
           ctx.fillRect(dx + 14, dy + 23, 10, 2);
         } else if (skin === 'ASTRONAUT') {
-          // 太空氧氣背包
           ctx.fillStyle = '#cfd8dc';
           ctx.fillRect(dx + 4, dy + 14, 6, 14);
         } else if (skin === 'GOLDEN') {
-          // 黃金閃亮光點
           ctx.fillStyle = '#fff9c4';
           ctx.fillRect(dx + 16, dy + 19, 3, 3);
         }
 
-        // 腳部
         ctx.fillStyle = color;
         if (!this.isGrounded || isDead) {
           ctx.fillRect(dx + 12, dy + 34, 4, 10);
@@ -982,14 +1131,12 @@
         this.isGrounded = false;
         playJumpSound();
 
-        // 統計雷雨天氣跳躍次數
         if (weather === 'RAIN') {
           stats.totalRainJumps++;
           checkAchievements(Math.floor(score));
           saveStats();
         }
 
-        // 流星雨之夜許願跳躍
         if (weather === 'METEOR_SHOWER' && shootingStars.length > 0) {
           score += 50;
           stats.totalScore += 50;
@@ -1015,7 +1162,6 @@
     }
   };
 
-  // 障礙物物件與動態繪製
   let obstacles = [];
   function spawnObstacle() {
     const isBird = Math.random() < 0.35 && score > 200;
@@ -1092,7 +1238,6 @@
     ctx.fillRect(x + 23, y + 8, 2, 3);
   }
 
-  // Firebase 排行榜數據
   onValue(leaderboardRef, (snapshot) => {
     const data = snapshot.val();
     globalScores = [];
@@ -1207,7 +1352,6 @@
   function checkNearMiss(dinoObj, obs) {
     const dinoHitbox = getDinoHitbox(dinoObj);
 
-    // 蹲下閃避翼龍統計
     if (!obs.duckChecked && obs.type === 'BIRD' && obs.x + obs.width < dinoHitbox.x) {
       obs.duckChecked = true;
       if (dinoObj.isDucking && dinoObj.isGrounded) {
@@ -1250,8 +1394,11 @@
     checkAchievements(currentScoreInt);
     saveStats();
 
-    const savedName = localStorage.getItem('pixel_runner_username') || '';
-    nameInput.value = savedName;
+    // 若已登入 Google 帳號，自動帶入 Google 顯示名稱
+    const defaultName = (currentUser && currentUser.displayName)
+      ? currentUser.displayName.slice(0, 10)
+      : (localStorage.getItem('pixel_runner_username') || '');
+    nameInput.value = defaultName;
 
     const isTopScore = globalScores.length < 10 || currentScoreInt > (globalScores[9]?.score || 0);
 
@@ -1269,7 +1416,8 @@
     const newScoreRef = ref(db, 'leaderboard/' + Date.now());
     set(newScoreRef, {
       name: name,
-      score: currentScoreInt
+      score: currentScoreInt,
+      uid: currentUser ? currentUser.uid : null
     });
 
     nameModal.style.display = 'none';
@@ -1284,7 +1432,6 @@
     }
   });
 
-  // 主更新邏輯
   function update() {
     frameCount++;
 
@@ -1434,7 +1581,6 @@
     }
   }
 
-  // 主畫面繪製
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
