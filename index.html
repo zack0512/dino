@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>沙沙dino jump game</title>
+  <title>沙沙dino jump game 🎮 雲端存檔與外掛飛行版</title>
   <style>
     * {
       box-sizing: border-box;
@@ -36,7 +36,6 @@
       max-width: 820px;
       padding: 20px;
     }
-    /* 頂部 Google 帳號與名稱狀態列 */
     #auth-bar {
       display: flex;
       justify-content: space-between;
@@ -53,7 +52,7 @@
     body.night #auth-bar, body.meteor-mode #auth-bar {
       background: rgba(255, 255, 255, 0.08);
     }
-    #user-profile {
+    #user-profile, #bar-actions {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -78,13 +77,31 @@
       color: inherit;
       transition: all 0.2s;
     }
-    .auth-btn:hover {
+    .auth-btn:hover:not(:disabled) {
       background: #535353;
       color: #fff;
     }
-    body.night .auth-btn:hover, body.meteor-mode .auth-btn:hover {
+    body.night .auth-btn:hover:not(:disabled),
+    body.meteor-mode .auth-btn:hover:not(:disabled) {
       background: #e8eaed;
       color: #202124;
+    }
+    /* 外掛飛行按鈕專屬樣式 */
+    #cheat-fly-btn {
+      border-color: #ff6d00;
+      color: #e65100;
+    }
+    body.night #cheat-fly-btn, body.meteor-mode #cheat-fly-btn {
+      border-color: #ffab40;
+      color: #ffab40;
+    }
+    #cheat-fly-btn:hover:not(:disabled) {
+      background: #ff6d00 !important;
+      color: #fff !important;
+    }
+    #cheat-fly-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
     }
     canvas {
       background-color: transparent;
@@ -191,7 +208,6 @@
     #achievement-toast.show {
       transform: translateX(-50%) translateY(0);
     }
-    /* 共用彈出視窗樣式（破紀錄輸入名字 & 隨時更改名稱） */
     .modal-box {
       display: none;
       position: absolute;
@@ -258,7 +274,7 @@
 <div id="achievement-toast">🏆 成就解鎖！</div>
 
 <div id="game-container">
-  <!-- Google 登入、名稱顯示與更改按鈕列 -->
+  <!-- 頂部狀態列：Google 登入 + 自訂名稱 + 外掛飛行按鈕 -->
   <div id="auth-bar">
     <div id="user-profile">
       <img id="user-avatar" src="" alt="頭像">
@@ -266,8 +282,9 @@
       <span>｜暱稱：<b id="current-player-name">無名氏</b></span>
       <button id="edit-name-btn" class="auth-btn">✏️ 改名</button>
     </div>
-    <div>
-      <button id="google-login-btn" class="auth-btn">🔑 Google 登入同步存檔</button>
+    <div id="bar-actions">
+      <button id="cheat-fly-btn" class="auth-btn" title="按下可無敵飛行 10 秒，但本局成績將無法登上排行榜">🚀 外掛飛行 10s [F]</button>
+      <button id="google-login-btn" class="auth-btn">🔑 Google 登入同步</button>
       <button id="google-logout-btn" class="auth-btn" style="display: none;">登出</button>
     </div>
   </div>
@@ -279,6 +296,7 @@
       <h4>🎮 操作與特色玩法</h4>
       <p>• [Space] / [↑] / 點擊：跳躍 / 重來 ｜ [↓] 按住：蹲下閃避</p>
       <p>• <b>極限擦身</b>：貼近障礙起跳觸發 COMBO ｜ <b>流星許願</b>：流星雨跳躍 +50 分</p>
+      <p>• <b>🚀 外掛飛行</b>：按 <b>[F]</b> 或按鈕無敵飛行 10 秒（<b>使用後當局不上排行榜</b>）</p>
       
       <h4 style="margin-top: 10px;">
         <span>🦖 恐龍造型衣櫃（達成條件解鎖）</span>
@@ -361,7 +379,7 @@
   const toastEl = document.getElementById('achievement-toast');
   const progressTextEl = document.getElementById('skin-progress-text');
 
-  // 帳號與名稱 UI 元素
+  // 帳號、名稱與外掛按鈕 UI 元素
   const loginBtn = document.getElementById('google-login-btn');
   const logoutBtn = document.getElementById('google-logout-btn');
   const userAvatar = document.getElementById('user-avatar');
@@ -372,6 +390,7 @@
   const renameInput = document.getElementById('rename-input');
   const saveRenameBtn = document.getElementById('save-rename-btn');
   const cancelRenameBtn = document.getElementById('cancel-rename-btn');
+  const cheatFlyBtn = document.getElementById('cheat-fly-btn');
 
   let currentUser = null;
   let gameState = 'START';
@@ -382,6 +401,50 @@
   const initialSpeed = 6;
   const maxSpeed = 22;
   let frameCount = 0;
+
+  // ==========================================
+  // 外掛飛行模式狀態管理
+  // ==========================================
+  let isFlyingCheat = false;       // 當前是否正在飛行中
+  let flyEndTime = 0;              // 飛行結束時間戳 (ms)
+  let usedCheatThisRun = false;    // 本局是否曾按過外掛（若為 true 則本局不上排行榜）
+
+  function updateCheatButtonUI() {
+    if (isFlyingCheat) {
+      const remain = Math.max(0, (flyEndTime - Date.now()) / 1000).toFixed(1);
+      cheatFlyBtn.textContent = `🔥 飛行中 (${remain}s)`;
+      cheatFlyBtn.disabled = true;
+    } else if (gameState !== 'PLAYING') {
+      cheatFlyBtn.textContent = '🚀 外掛飛行 10s [F]';
+      cheatFlyBtn.disabled = true;
+    } else {
+      cheatFlyBtn.textContent = usedCheatThisRun ? '🚀 再次飛行 10s [F]' : '🚀 外掛飛行 10s [F]';
+      cheatFlyBtn.disabled = false;
+    }
+  }
+
+  function activateCheatFly() {
+    if (gameState !== 'PLAYING' || isModalOpen()) return;
+    if (isFlyingCheat) return;
+
+    isFlyingCheat = true;
+    usedCheatThisRun = true;
+    flyEndTime = Date.now() + 10000; // 10 秒無敵高空飛行
+    dino.isGrounded = false;
+    dino.isDucking = false;
+    dino.velocityY = 0;
+
+    playCheatFlySound();
+    spawnFloatingText('🚀 外掛飛行啟動！10秒無敵（本局不上榜）', dino.x, 70, '#ff6d00');
+    showToast('🚀 外掛飛行 10 秒！提醒：本局成績將不計入排行榜');
+    updateCheatButtonUI();
+  }
+
+  cheatFlyBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    activateCheatFly();
+    cheatFlyBtn.blur();
+  });
 
   // ==========================================
   // 1. 玩家名稱管理 & 10 款造型存檔系統
@@ -427,7 +490,6 @@
 
   updatePlayerNameDisplay();
 
-  // 開啟與關閉「更改名稱」彈窗
   editNameBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const current = getActivePlayerName();
@@ -551,7 +613,6 @@
           ...(cloudData.unlockedSkins || ['DEFAULT'])
         ]));
 
-        // 優先保留自訂過的名稱，若無則讀取雲端名稱或 Google 名稱
         const resolvedName = stats.customName || cloudData.customName || (user.displayName ? user.displayName.slice(0, 10) : '');
 
         stats = {
@@ -653,7 +714,8 @@
 
   function checkAchievements(currentRunScore = 0) {
     let newlyUnlocked = false;
-    if (currentRunScore > stats.maxSingleScore) {
+    // 若使用外掛，不刷新「正式單場最高分」成就門檻（其餘趣味動作仍可累積）
+    if (!usedCheatThisRun && currentRunScore > stats.maxSingleScore) {
       stats.maxSingleScore = currentRunScore;
     }
 
@@ -706,8 +768,8 @@
 
   checkAchievements(stats.maxSingleScore);
   updateSkinButtonsUI();
+  updateCheatButtonUI();
 
-  // 統一判斷任何輸入彈窗是否正在開啟，防止按空白鍵打字時觸發跳躍/重開
   function isModalOpen() {
     return (
       nameModal.style.display === 'block' ||
@@ -1058,6 +1120,11 @@
   function playHitSound() { playSound(150, 'sawtooth', 0.25); }
   function playScoreSound() { playSound(850, 'sine', 0.15); }
   function playNearMissSound() { playSound(660, 'triangle', 0.12, 0.1); }
+  function playCheatFlySound() {
+    playSound(330, 'sawtooth', 0.12, 0.08);
+    setTimeout(() => playSound(440, 'sawtooth', 0.12, 0.08), 80);
+    setTimeout(() => playSound(660, 'sawtooth', 0.2, 0.08), 160);
+  }
   function playAchievementSound() {
     playSound(523, 'square', 0.1, 0.08);
     setTimeout(() => playSound(659, 'square', 0.1, 0.08), 90);
@@ -1065,7 +1132,7 @@
   }
 
   // ==========================================
-  // 2. 恐龍物件（10 款造型外觀 + 驚訝死法）
+  // 2. 恐龍物件（10 款造型外觀 + 外掛飛行噴射特效）
   // ==========================================
   let nearMissCombo = 0;
 
@@ -1082,6 +1149,15 @@
     legFrame: 0,
     
     draw() {
+      // 飛行最後 1.5 秒閃爍提醒即將降落
+      if (isFlyingCheat) {
+        const remainMs = flyEndTime - Date.now();
+        if (remainMs < 1500 && Math.floor(frameCount / 4) % 2 === 0) {
+          ctx.save();
+          ctx.globalAlpha = 0.45;
+        }
+      }
+
       const skin = stats.selectedSkin;
       let color = isNight ? '#e8eaed' : '#535353';
 
@@ -1105,7 +1181,15 @@
       const isDead = gameState === 'GAMEOVER';
       ctx.fillStyle = color;
 
-      if (skin === 'COMBO_KING' && gameState === 'PLAYING') {
+      // 外掛飛行噴射火焰與氣流尾跡
+      if (isFlyingCheat && gameState === 'PLAYING') {
+        ctx.fillStyle = frameCount % 4 < 2 ? '#ff6d00' : '#ffd54f';
+        ctx.fillRect(this.x - 14, this.y + 18, 14, 8);
+        ctx.fillRect(this.x - 24, this.y + 20, 10, 4);
+        ctx.fillStyle = '#00e5ff';
+        ctx.fillRect(this.x + 8, this.y + 45, 16, 4);
+        ctx.fillStyle = color;
+      } else if (skin === 'COMBO_KING' && gameState === 'PLAYING') {
         ctx.fillStyle = frameCount % 4 < 2 ? '#ff9100' : '#ff1744';
         ctx.fillRect(this.x - 10, this.y + 20, 10, 6);
         ctx.fillRect(this.x - 16, this.y + 22, 6, 3);
@@ -1118,7 +1202,7 @@
         ctx.fillStyle = color;
       }
 
-      if (this.isDucking && this.isGrounded && !isDead) {
+      if (this.isDucking && this.isGrounded && !isDead && !isFlyingCheat) {
         const dy = 184;
         ctx.fillRect(this.x, dy + 10, 52, 16);
         ctx.fillRect(this.x + 36, dy + 4, 20, 12);
@@ -1225,7 +1309,7 @@
         }
 
         ctx.fillStyle = color;
-        if (!this.isGrounded || isDead) {
+        if (!this.isGrounded || isDead || isFlyingCheat) {
           ctx.fillRect(dx + 12, dy + 34, 4, 10);
           ctx.fillRect(dx + 22, dy + 34, 4, 10);
         } else {
@@ -1240,8 +1324,16 @@
           }
         }
       }
+
+      if (isFlyingCheat) {
+        const remainMs = flyEndTime - Date.now();
+        if (remainMs < 1500 && Math.floor(frameCount / 4) % 2 === 0) {
+          ctx.restore();
+        }
+      }
     },
     jump() {
+      if (isFlyingCheat) return; // 飛行中不需起跳
       if (this.isGrounded) {
         this.velocityY = this.jumpPower;
         this.isGrounded = false;
@@ -1265,6 +1357,23 @@
       }
     },
     update() {
+      if (isFlyingCheat) {
+        if (Date.now() >= flyEndTime) {
+          // 10 秒飛行結束，平滑降回地面
+          isFlyingCheat = false;
+          this.velocityY = 0;
+          updateCheatButtonUI();
+        } else {
+          // 平穩懸浮於高空 y = 42
+          const targetFlyY = 42;
+          this.y += (targetFlyY - this.y) * 0.22;
+          this.velocityY = 0;
+          this.isGrounded = false;
+          updateCheatButtonUI();
+          return;
+        }
+      }
+
       if (!this.isGrounded) {
         this.velocityY += this.gravity;
         this.y += this.velocityY;
@@ -1396,11 +1505,15 @@
   window.addEventListener('keydown', (e) => {
     if (isModalOpen()) return;
 
+    if (e.code === 'KeyF' && gameState === 'PLAYING') {
+      e.preventDefault();
+      activateCheatFly();
+    }
     if (e.code === 'Space' || e.code === 'ArrowUp') {
       e.preventDefault();
       handlePrimaryAction();
     }
-    if (e.code === 'ArrowDown' && gameState === 'PLAYING') {
+    if (e.code === 'ArrowDown' && gameState === 'PLAYING' && !isFlyingCheat) {
       dino.isDucking = true;
     }
   });
@@ -1434,6 +1547,12 @@
     nearMissCombo = 0;
     nextLandmarkScore = 100;
     pendingLandmark = false;
+
+    // 重置外掛飛行狀態與恢復排行榜資格
+    isFlyingCheat = false;
+    flyEndTime = 0;
+    usedCheatThisRun = false;
+
     initCityBuildings();
     dino.y = 164;
     dino.velocityY = 0;
@@ -1443,6 +1562,7 @@
     weather = 'CLEAR';
     isNight = false;
     document.body.classList.remove('night', 'meteor-mode');
+    updateCheatButtonUI();
   }
 
   function getDinoHitbox(dinoObj) {
@@ -1452,6 +1572,8 @@
   }
 
   function checkCollision(dinoObj, obs) {
+    if (isFlyingCheat) return false; // 飛行無敵狀態不會撞到任何障礙物
+
     const dinoHitbox = getDinoHitbox(dinoObj);
     const obsHitbox = obs.type === 'CACTUS'
       ? { x: obs.x + 5, y: obs.y + 6, width: Math.max(6, obs.width - 10), height: obs.height - 8 }
@@ -1466,6 +1588,8 @@
   }
 
   function checkNearMiss(dinoObj, obs) {
+    if (isFlyingCheat) return; // 飛行狀態不觸發擦身
+
     const dinoHitbox = getDinoHitbox(dinoObj);
 
     if (!obs.duckChecked && obs.type === 'BIRD' && obs.x + obs.width < dinoHitbox.x) {
@@ -1503,6 +1627,8 @@
 
   function handleGameOver() {
     gameState = 'GAMEOVER';
+    isFlyingCheat = false;
+    updateCheatButtonUI();
     playHitSound();
 
     stats.gamesPlayed++;
@@ -1510,7 +1636,12 @@
     checkAchievements(currentScoreInt);
     saveStats();
 
-    // 預設帶入目前設定好的玩家名稱
+    // 若本局使用過外掛，禁止登入排行榜
+    if (usedCheatThisRun) {
+      showToast('🚫 本局使用過外掛飛行，成績不列入排行榜');
+      return;
+    }
+
     const currentName = getActivePlayerName();
     nameInput.value = currentName === '無名氏' ? '' : currentName;
 
@@ -1523,8 +1654,8 @@
   }
 
   function submitLeaderboardName() {
+    if (usedCheatThisRun) return; // 雙重防護
     const name = nameInput.value.trim() || '無名氏';
-    // 同步更新玩家自訂名稱
     setPlayerName(name);
     const currentScoreInt = Math.floor(score);
     
@@ -1639,14 +1770,17 @@
         m.x += m.vx;
         m.y += m.vy;
 
-        const dBox = getDinoHitbox(dino);
-        if (
-          m.x - 5 < dBox.x + dBox.width &&
-          m.x + 5 > dBox.x &&
-          m.y - 5 < dBox.y + dBox.height &&
-          m.y + 5 > dBox.y
-        ) {
-          handleGameOver();
+        // 飛行無敵期間忽略火山隕石碰撞
+        if (!isFlyingCheat) {
+          const dBox = getDinoHitbox(dino);
+          if (
+            m.x - 5 < dBox.x + dBox.width &&
+            m.x + 5 > dBox.x &&
+            m.y - 5 < dBox.y + dBox.height &&
+            m.y + 5 > dBox.y
+          ) {
+            handleGameOver();
+          }
         }
 
         if (m.y >= groundOffset) {
@@ -1778,6 +1912,20 @@
     };
     ctx.fillText(weatherLabels[weather], 15, 25);
 
+    // 外掛狀態與倒數進度條顯示
+    if (usedCheatThisRun) {
+      ctx.fillStyle = '#ff5252';
+      ctx.fillText('🚫 已使用外掛（本局不計入排行榜）', 15, 43);
+    }
+    if (isFlyingCheat && gameState === 'PLAYING') {
+      const remainRatio = Math.max(0, (flyEndTime - Date.now()) / 10000);
+      ctx.fillStyle = 'rgba(255, 109, 0, 0.25)';
+      ctx.fillRect(15, 50, 140, 6);
+      ctx.fillStyle = '#ff6d00';
+      ctx.fillRect(15, 50, 140 * remainRatio, 6);
+    }
+
+    ctx.fillStyle = themeColor;
     ctx.font = '700 18px "Courier New", monospace';
     if (gameState === 'START') {
       ctx.fillText('按下 [Space] 或點擊螢幕開始遊戲', canvas.width / 2 - 175, 110);
