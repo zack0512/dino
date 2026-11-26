@@ -86,7 +86,32 @@
       background: #e8eaed;
       color: #202124;
     }
+    /* 外掛密技輸入框區塊 */
+    #cheat-code-box {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    #cheat-code-input {
+      width: 96px;
+      padding: 4px 8px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: bold;
+      border: 2px solid currentColor;
+      border-radius: 6px;
+      background: transparent;
+      color: inherit;
+      outline: none;
+      user-select: text;
+      text-align: center;
+    }
+    #cheat-code-input::placeholder {
+      color: inherit;
+      opacity: 0.55;
+    }
     #cheat-fly-btn {
+      display: none; /* 輸入 fly 解鎖前隱藏 */
       border-color: #ff6d00;
       color: #e65100;
     }
@@ -281,6 +306,12 @@
       <button id="edit-name-btn" class="auth-btn">✏️ 改名</button>
     </div>
     <div id="bar-actions">
+      <!-- 外掛密技輸入框 -->
+      <div id="cheat-code-box">
+        <input type="text" id="cheat-code-input" maxlength="12" placeholder="輸入外掛碼" autocomplete="off">
+        <button id="cheat-unlock-btn" class="auth-btn">🔓 解鎖</button>
+      </div>
+      <!-- 輸入 fly 解鎖後才會顯示的起飛按鈕 -->
       <button id="cheat-fly-btn" class="auth-btn" title="按下開啟超音速噴射暴衝 10 秒，但本局成績將無法登上排行榜">🚀 噴射暴衝 10s [F]</button>
       <button id="google-login-btn" class="auth-btn">🔑 Google 登入同步</button>
       <button id="google-logout-btn" class="auth-btn" style="display: none;">登出</button>
@@ -294,7 +325,7 @@
       <h4>🎮 操作與特色玩法</h4>
       <p>• [Space] / [↑] / 點擊：跳躍 / 重來 ｜ [↓] 按住：蹲下閃避</p>
       <p>• <b>極限擦身</b>：貼近障礙起跳觸發 COMBO ｜ <b>流星許願</b>：流星雨跳躍 +50 分</p>
-      <p>• <b>🚀 噴射暴衝</b>：按 <b>[F]</b> 或按鈕啟動 2.8 倍速無敵噴射（<b>使用後當局不上榜</b>）</p>
+      <p>• <b>🚀 外掛密技</b>：上方輸入 <b>fly</b> 解鎖起飛外掛，按 <b>[F]</b> 暴衝 10 秒（<b>使用後當局不上榜</b>）</p>
       
       <h4 style="margin-top: 10px;">
         <span>🦖 恐龍造型衣櫃（達成條件解鎖）</span>
@@ -385,6 +416,11 @@
   const renameInput = document.getElementById('rename-input');
   const saveRenameBtn = document.getElementById('save-rename-btn');
   const cancelRenameBtn = document.getElementById('cancel-rename-btn');
+
+  // 外掛密技輸入框與按鈕
+  const cheatCodeBox = document.getElementById('cheat-code-box');
+  const cheatCodeInput = document.getElementById('cheat-code-input');
+  const cheatUnlockBtn = document.getElementById('cheat-unlock-btn');
   const cheatFlyBtn = document.getElementById('cheat-fly-btn');
 
   let currentUser = null;
@@ -398,20 +434,57 @@
   let frameCount = 0;
 
   // ==========================================
-  // 外掛「超音速噴射暴衝」狀態與粒子特效系統
+  // 外掛「密技解鎖 + 超音速噴射暴衝」系統
   // ==========================================
+  let isFlyCheatUnlocked = false; // 是否已輸入 fly 解鎖外掛
   let isFlyingCheat = false;
   let flyEndTime = 0;
-  let landingGraceEndTime = 0;   // 降落後 1.5 秒落地保護期（防止降落瞬間剛好撞到障礙物）
+  let landingGraceEndTime = 0;
   let usedCheatThisRun = false;
-  let boostMultiplier = 1.0;     // 暴衝速度倍率（1.0 -> 2.8）
+  let boostMultiplier = 1.0;
 
-  let screenShake = 0;           // 畫面震動強度
-  let sonicFlashAlpha = 0;       // 音爆閃光透明度
-  let jetParticles = [];         // 推進器火焰與火星粒子
-  let sonicRings = [];           // 音爆擴散氣環
-  let speedLines = [];           // 超音速動態速度線
-  let afterimages = [];          // 恐龍高速殘影
+  let screenShake = 0;
+  let sonicFlashAlpha = 0;
+  let jetParticles = [];
+  let sonicRings = [];
+  let speedLines = [];
+  let afterimages = [];
+
+  function tryUnlockFlyCheat() {
+    const code = cheatCodeInput.value.trim().toLowerCase();
+    if (code === 'fly') {
+      isFlyCheatUnlocked = true;
+      cheatCodeBox.style.display = 'none';
+      cheatFlyBtn.style.display = 'inline-block';
+      cheatCodeInput.blur();
+      updateCheatButtonUI();
+      showToast('🔓 起飛外掛已解鎖！遊戲中按 [F] 或按鈕起飛（使用後本局不上榜）');
+    } else {
+      showToast('❌ 外掛碼錯誤！提示：輸入 fly');
+      cheatCodeInput.value = '';
+      cheatCodeInput.focus();
+    }
+  }
+
+  cheatUnlockBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    tryUnlockFlyCheat();
+    cheatUnlockBtn.blur();
+  });
+
+  cheatCodeInput.addEventListener('keydown', (e) => {
+    e.stopPropagation(); // 防止輸入文字時觸發遊戲按鍵
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      tryUnlockFlyCheat();
+    } else if (e.key === 'Escape') {
+      cheatCodeInput.blur();
+    }
+  });
+
+  cheatCodeInput.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
 
   function spawnJetBurst(x, y) {
     screenShake = 14;
@@ -434,6 +507,12 @@
   }
 
   function updateCheatButtonUI() {
+    if (!isFlyCheatUnlocked) {
+      cheatFlyBtn.style.display = 'none';
+      return;
+    }
+    cheatFlyBtn.style.display = 'inline-block';
+
     if (isFlyingCheat) {
       const remain = Math.max(0, (flyEndTime - Date.now()) / 1000).toFixed(1);
       cheatFlyBtn.textContent = `🔥 暴衝噴射中 (${remain}s)`;
@@ -448,13 +527,14 @@
   }
 
   function activateCheatFly() {
+    if (!isFlyCheatUnlocked) return;
     if (gameState !== 'PLAYING' || isModalOpen()) return;
     if (isFlyingCheat) return;
 
     isFlyingCheat = true;
     usedCheatThisRun = true;
     flyEndTime = Date.now() + 10000;
-    boostMultiplier = 2.8; // 瞬間飆升至 2.8 倍速
+    boostMultiplier = 2.8;
     dino.isGrounded = false;
     dino.isDucking = false;
     dino.velocityY = 0;
@@ -800,7 +880,8 @@
       nameModal.style.display === 'block' ||
       renameModal.style.display === 'block' ||
       document.activeElement === nameInput ||
-      document.activeElement === renameInput
+      document.activeElement === renameInput ||
+      document.activeElement === cheatCodeInput
     );
   }
 
@@ -1126,7 +1207,7 @@
   }
 
   // ==========================================
-  // 音效系統（新增噴射引擎轟鳴與音爆音效）
+  // 音效系統
   // ==========================================
   const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   function playSound(freq, type, duration, gainVal = 0.08) {
@@ -1150,7 +1231,6 @@
 
   function playCheatFlySound() {
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    // 音爆低音衝擊 + 渦輪增壓升頻
     const osc1 = audioCtx.createOscillator();
     const gain1 = audioCtx.createGain();
     osc1.type = 'sawtooth';
@@ -1167,7 +1247,6 @@
   }
 
   function playJetThrusterHum() {
-    // 飛行中的渦輪推進器低頻脈衝聲
     playSound(95 + Math.random() * 35, 'sawtooth', 0.09, 0.035);
   }
 
@@ -1197,13 +1276,11 @@
     draw() {
       ctx.save();
 
-      // 飛行最後 1.5 秒閃爍提醒即將降落
       if (isFlyingCheat) {
         const remainMs = flyEndTime - Date.now();
         if (remainMs < 1500 && Math.floor(frameCount / 4) % 2 === 0) {
           ctx.globalAlpha = 0.45;
         }
-        // 超音速衝刺時恐龍略微前傾並帶高頻引擎微震
         const tilt = 0.14;
         const vibY = (Math.random() - 0.5) * 2.2;
         ctx.translate(this.x + 22, this.y + 23 + vibY);
@@ -1234,24 +1311,18 @@
       const isDead = gameState === 'GAMEOVER';
       ctx.fillStyle = color;
 
-      // 超音速三層電漿噴射尾焰 + 機頭突破氣流罩
       if (isFlyingCheat && gameState === 'PLAYING') {
         const flicker = Math.random() * 18;
-        // 外層烈焰紅橙
         ctx.fillStyle = '#ff3d00';
         ctx.fillRect(this.x - 36 - flicker, this.y + 15, 36 + flicker, 14);
-        // 中層亮金火舌
         ctx.fillStyle = '#ffd54f';
         ctx.fillRect(this.x - 24 - flicker * 0.6, this.y + 18, 24 + flicker * 0.6, 8);
-        // 內層高溫白藍核心
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(this.x - 12, this.y + 20, 12, 4);
 
-        // 腳底輔助懸浮噴嘴藍焰
         ctx.fillStyle = '#00e5ff';
         ctx.fillRect(this.x + 10, this.y + 44, 16, 4 + Math.random() * 4);
 
-        // 恐龍前方音爆氣流護盾線
         ctx.fillStyle = 'rgba(0, 229, 255, 0.65)';
         ctx.fillRect(this.x + 48, this.y + 2, 3, 38);
         ctx.fillRect(this.x + 52, this.y + 8, 2, 26);
@@ -1423,26 +1494,22 @@
       if (isFlyingCheat) {
         const remainMs = flyEndTime - Date.now();
         if (remainMs <= 0) {
-          // 10 秒飛行結束，平滑減速並啟動 1.5 秒落地保護緩衝
           isFlyingCheat = false;
           landingGraceEndTime = Date.now() + 1500;
           this.velocityY = 0;
           updateCheatButtonUI();
         } else {
-          // 最後 1.2 秒開始平滑降回正常速度，避免突然降速突兀
           if (remainMs < 1200) {
             boostMultiplier = 1.0 + 1.8 * (remainMs / 1200);
           } else {
             boostMultiplier = 2.8;
           }
 
-          // 懸浮於高空 y = 44，並帶細微氣流起伏
           const targetFlyY = 44 + Math.sin(frameCount * 0.25) * 3;
           this.y += (targetFlyY - this.y) * 0.25;
           this.velocityY = 0;
           this.isGrounded = false;
 
-          // 持續噴出推進器火花粒子
           for (let i = 0; i < 3; i++) {
             jetParticles.push({
               x: this.x - 4,
@@ -1456,12 +1523,10 @@
             });
           }
 
-          // 每 2 幀產生一個恐龍高速殘影
           if (frameCount % 2 === 0) {
             afterimages.push({ x: this.x, y: this.y, alpha: 0.45 });
           }
 
-          // 產生超音速速度線
           if (Math.random() < 0.75) {
             speedLines.push({
               x: canvas.width + 20,
@@ -1472,7 +1537,6 @@
             });
           }
 
-          // 噴射引擎低頻脈衝音效
           if (frameCount % 5 === 0) {
             playJetThrusterHum();
           }
@@ -1481,7 +1545,6 @@
           return;
         }
       } else {
-        // 非飛行狀態時確保速度倍率平滑歸 1.0
         boostMultiplier += (1.0 - boostMultiplier) * 0.15;
       }
 
@@ -1616,7 +1679,7 @@
   window.addEventListener('keydown', (e) => {
     if (isModalOpen()) return;
 
-    if (e.code === 'KeyF' && gameState === 'PLAYING') {
+    if (e.code === 'KeyF' && gameState === 'PLAYING' && isFlyCheatUnlocked) {
       e.preventDefault();
       activateCheatFly();
     }
@@ -1690,7 +1753,6 @@
   }
 
   function checkCollision(dinoObj, obs) {
-    // 飛行暴衝期間與降落後 1.5 秒落地保護期內皆為無敵狀態
     if (isFlyingCheat || Date.now() < landingGraceEndTime) return false;
 
     const dinoHitbox = getDinoHitbox(dinoObj);
@@ -1810,7 +1872,6 @@
     if (gameState === 'PLAYING') {
       const currentScoreInt = Math.floor(score);
       const baseSpeed = Math.min(initialSpeed + currentScoreInt * 0.008, maxSpeed);
-      // 暴衝期間速度乘上 2.8 倍（最高 48），分數也跟著 2.8 倍狂飆！
       currentSpeed = baseSpeed * boostMultiplier;
 
       const scoreGain = 0.15 * boostMultiplier;
@@ -1950,7 +2011,6 @@
       }
     }
 
-    // 更新暴衝粒子、音爆環、殘影與速度線
     for (let i = jetParticles.length - 1; i >= 0; i--) {
       const p = jetParticles[i];
       p.x += p.vx;
@@ -1992,7 +2052,6 @@
   function draw() {
     ctx.save();
 
-    // 啟動瞬間震動與暴衝持續低幅引擎震動
     if (screenShake > 0) {
       const sx = (Math.random() - 0.5) * screenShake;
       const sy = (Math.random() - 0.5) * screenShake;
@@ -2007,7 +2066,6 @@
     const themeColor = isNight ? '#e8eaed' : '#535353';
     const bgColor = weather === 'VOLCANO' ? '#2b1818' : (isNight ? '#202124' : '#f7f7f7');
 
-    // 音爆啟動閃光
     if (sonicFlashAlpha > 0) {
       ctx.fillStyle = `rgba(255, 213, 79, ${sonicFlashAlpha})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -2037,7 +2095,6 @@
     drawCityBackground();
     clouds.forEach(cloud => drawCloud(cloud));
 
-    // 繪製超音速速度線
     speedLines.forEach(sl => {
       ctx.fillStyle = isNight
         ? `rgba(0, 229, 255, ${sl.alpha})`
@@ -2067,7 +2124,6 @@
       ctx.fillRect(m.x - 2, m.y - 2, 4, 4);
     });
 
-    // 繪製音爆氣環
     sonicRings.forEach(r => {
       ctx.save();
       ctx.strokeStyle = `rgba(0, 229, 255, ${r.alpha})`;
@@ -2078,7 +2134,6 @@
       ctx.restore();
     });
 
-    // 繪製推進器火焰與火星粒子
     jetParticles.forEach(p => {
       ctx.save();
       ctx.globalAlpha = Math.max(0, p.life);
@@ -2087,7 +2142,6 @@
       ctx.restore();
     });
 
-    // 繪製恐龍高速殘影
     afterimages.forEach(a => {
       ctx.save();
       ctx.globalAlpha = Math.max(0, a.alpha);
